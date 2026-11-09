@@ -1,0 +1,55 @@
+# =============================================================================
+# proyecto_base — Apache (XAMPP / local y Linux)
+# Equivalente IIS: web.config
+# =============================================================================
+Options -Indexes
+Options +FollowSymLinks
+
+# -----------------------------------------------------------------------------
+# 1. Bloqueo de archivos sensibles (secretos, migraciones, documentación)
+# -----------------------------------------------------------------------------
+<FilesMatch "^(\.env.*|composer\.(json|lock)|MEMORY\.md|web\.config|AGENTS\.md|README\.md|.*\.(sql|md|ini|log|lock|bak|dist|swp|swo|orig|save|old))$">
+    Require all denied
+</FilesMatch>
+
+# Compatibilidad con Apache 2.2 (XAMPP antiguos)
+<IfModule !mod_authz_core.c>
+    <FilesMatch "^(\.env.*|composer\.(json|lock)|MEMORY\.md|web\.config|AGENTS\.md|README\.md|.*\.(sql|md|ini|log|lock|bak|dist|swp|swo|orig|save|old))$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# -----------------------------------------------------------------------------
+# 2. Bloqueo de directorios que nunca deben servirse directamente
+# -----------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Directorios sensibles (se sirven solo mediante controladores)
+    RewriteRule ^(database|\.git|application|system|upload)(/|$) - [F,L]
+
+    # No reescribir si es un archivo o directorio real
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Redirigir todo a index.php
+    RewriteRule ^(.*)$ index.php/$1 [L]
+</IfModule>
+
+# -----------------------------------------------------------------------------
+# 3. Endurecimiento básico de cabeceras a nivel Apache (si mod_headers existe)
+#    Las cabeceras principales también se envían desde PHP (hooks/Security_headers).
+# -----------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    # Las cabeceras de seguridad de las respuestas dinámicas se envían desde
+    # application/hooks/Security_headers.php. Aquí solo se elimina la firma
+    # del servidor en todos los recursos, incluidos los estáticos.
+    Header always unset X-Powered-By
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set X-Permitted-Cross-Domain-Policies "none"
+    Header always set Cross-Origin-Opener-Policy "same-origin"
+</IfModule>

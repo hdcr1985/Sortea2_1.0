@@ -1,0 +1,805 @@
+/**
+ * Metronic Demo 1 - Dark Sidebar Stylesheet
+ * Replicado exactamente de http://localhost/proyecto_base_metronic/dist/html/demo1/dashboards/dark-sidebar.html
+ */
+
+:root {
+    --demo1-sidebar-width: var(--app-sidebar-width, 280px);
+    --demo1-sidebar-width-collapse: 80px;
+    --demo1-sidebar-bg: var(--app-sidebar-bg, #09090b);
+    --demo1-sidebar-border: rgba(255, 255, 255, 0.08);
+    --demo1-sidebar-text: var(--app-sidebar-text, #fafafa);
+    --demo1-sidebar-text-muted: rgba(var(--app-sidebar-text-rgb, 161, 165, 183), 0.7);
+    --demo1-sidebar-accent: rgba(255, 255, 255, 0.04);
+    --demo1-sidebar-primary: var(--app-sidebar-active-bg, var(--bs-primary, #1B84FF));
+    --demo1-sidebar-primary-rgb: var(--app-sidebar-active-bg-rgb, var(--bs-primary-rgb, 27, 132, 255));
+    --demo1-sidebar-active-text: var(--app-sidebar-active-text, #FFFFFF);
+    --demo1-sidebar-font-weight: var(--app-sidebar-font-weight, 500);
+}
+
+/* Sidebar Container */
+#kt_app_sidebar,
+.demo1-sidebar {
+    width: var(--demo1-sidebar-width) !important;
+    background-color: var(--demo1-sidebar-bg) !important;
+    border-right: 1px solid var(--demo1-sidebar-border) !important;
+    border-left: none !important;
+    box-shadow: none !important;
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    z-index: 105 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: width;
+}
+
+#kt_app_sidebar.animating,
+#kt_app_sidebar.animating * {
+    pointer-events: none !important;
+}
+
+@media (min-width: 992px) {
+    :root {
+        --bs-app-sidebar-width: var(--demo1-sidebar-width);
+        --bs-app-sidebar-width-actual: var(--demo1-sidebar-width);
+    }
+    body:not([data-kt-app-sidebar-minimize="on"]):not(.kt-sidebar-collapse) .app-wrapper,
+    body:not([data-kt-app-sidebar-minimize="on"]):not(.kt-sidebar-collapse) [data-kt-app-sidebar-fixed=true] .app-wrapper {
+        margin-left: var(--demo1-sidebar-width) !important;
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        will-change: margin-left;
+    }
+    body:not([data-kt-app-sidebar-minimize="on"]):not(.kt-sidebar-collapse) .app-header,
+    body:not([data-kt-app-sidebar-minimize="on"]):not(.kt-sidebar-collapse) [data-kt-app-header-fixed=true] .app-header {
+        left: var(--demo1-sidebar-width) !important;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        will-change: left;
+    }
+}
+
+/* Header & Logo */
+#kt_app_sidebar .app-sidebar-logo,
+.demo1-sidebar-header {
+    height: 70px !important;
+    min-height: 70px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0 1.5rem !important;
+    position: relative !important;
+    border-bottom: 1px solid var(--demo1-sidebar-border) !important;
+    background-color: transparent !important;
+}
+
+#kt_app_sidebar .app-sidebar-logo a {
+    display: flex !important;
+    align-items: center !important;
+}
+
+#kt_app_sidebar .app-sidebar-logo-default {
+    height: var(--app-dashboard-logo-height, 25px) !important;
+    min-height: 22px !important;
+    max-height: 80px !important;
+    width: auto !important;
+}
+
+#kt_app_sidebar .app-sidebar-logo-minimize {
+    display: none !important;
+    min-height: 22px !important;
+    width: auto !important;
+}
+
+/* Toggle Button (Neutral Metronic Toggle) */
+#kt_app_sidebar .app-sidebar-toggle,
+#sidebar_toggle {
+    width: 30px !important;
+    height: 30px !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #E4E6EF !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: absolute !important;
+    left: 100% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 110 !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    transition: all 0.2s ease !important;
+}
+
+#kt_app_sidebar .app-sidebar-toggle i,
+#sidebar_toggle i {
+    color: #7E8299 !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#kt_app_sidebar .app-sidebar-toggle:hover,
+#sidebar_toggle:hover {
+    background-color: #F9F9F9 !important;
+    border-color: #D8D8E0 !important;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12) !important;
+}
+
+#kt_app_sidebar .app-sidebar-toggle:hover i,
+#sidebar_toggle:hover i {
+    color: #181C32 !important;
+}
+
+/* Sidebar Scrollable Content */
+#kt_app_sidebar .app-sidebar-menu,
+.demo1-sidebar-content {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 1.25rem 0.5rem 1.25rem 0.75rem !important;
+}
+
+/* Custom Scrollbar */
+#kt_app_sidebar .app-sidebar-menu::-webkit-scrollbar {
+    width: 5px !important;
+}
+#kt_app_sidebar .app-sidebar-menu::-webkit-scrollbar-thumb {
+    background-color: transparent !important;
+    border-radius: 10px !important;
+}
+#kt_app_sidebar .app-sidebar-menu:hover::-webkit-scrollbar-thumb {
+    background-color: var(--demo1-sidebar-border) !important;
+}
+
+/* Menu Container */
+#kt_app_sidebar .menu,
+.demo1-menu {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style: none !important;
+}
+
+/* Menu Item */
+#kt_app_sidebar .menu-item,
+.demo1-menu-item {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Menu Section Heading */
+#kt_app_sidebar .menu-heading {
+    text-transform: uppercase !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+    color: var(--demo1-sidebar-text-muted) !important;
+    padding: 14px 10px 6px 10px !important;
+    margin: 0 !important;
+}
+
+/* Menu Link */
+#kt_app_sidebar .menu-link {
+    display: flex !important;
+    align-items: center !important;
+    cursor: pointer !important;
+    padding: 9px 12px !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    border: 1px solid transparent !important;
+    gap: 12px !important;
+    text-decoration: none !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Menu Title */
+#kt_app_sidebar .menu-link .menu-title {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+    color: var(--demo1-sidebar-text) !important;
+    flex-grow: 1 !important;
+    transition: color 0.2s ease !important;
+}
+
+/* Menu Icon */
+#kt_app_sidebar .menu-link .menu-icon {
+    width: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    flex-shrink: 0 !important;
+    color: var(--demo1-sidebar-text-muted) !important;
+    margin-right: 0 !important;
+}
+
+#kt_app_sidebar .menu-link .menu-icon i {
+    font-size: 18px !important;
+    color: var(--demo1-sidebar-text-muted) !important;
+    transition: color 0.2s ease !important;
+}
+
+/* Menu Arrow */
+#kt_app_sidebar .menu-link .menu-arrow {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
+}
+
+#kt_app_sidebar .menu-link .menu-arrow:after {
+    content: " " !important;
+    display: block !important;
+    width: 8px !important;
+    height: 8px !important;
+    background-color: var(--demo1-sidebar-text-muted, rgba(255, 255, 255, 0.6)) !important;
+    -webkit-mask-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6' fill='currentColor'%3e%3cpath d='M3.27989 3.23571L1.53642 4.97917C1.36382 5.15176 1.36383 5.43158 1.53642 5.60417C1.70901 5.77676 1.98882 5.77676 2.16139 5.60417L4.47096 3.29463C4.63371 3.13192 4.63371 2.86809 4.47096 2.70538L2.16139 0.395812C1.98883 0.22325 1.70901 0.22325 1.53642 0.395812C1.36383 0.568437 1.36383 0.84825 1.53642 1.02081L3.27989 2.76429C3.41006 2.89446 3.41006 3.10554 3.27989 3.23571Z'/%3e%3c/svg%3e") !important;
+    mask-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6' fill='currentColor'%3e%3cpath d='M3.27989 3.23571L1.53642 4.97917C1.36382 5.15176 1.36383 5.43158 1.53642 5.60417C1.70901 5.77676 1.98882 5.77676 2.16139 5.60417L4.47096 3.29463C4.63371 3.13192 4.63371 2.86809 4.47096 2.70538L2.16139 0.395812C1.98883 0.22325 1.70901 0.22325 1.53642 0.395812C1.36383 0.568437 1.36383 0.84825 1.53642 1.02081L3.27989 2.76429C3.41006 2.89446 3.41006 3.10554 3.27989 3.23571Z'/%3e%3c/svg%3e") !important;
+    -webkit-mask-repeat: no-repeat !important;
+    mask-repeat: no-repeat !important;
+    -webkit-mask-position: center !important;
+    mask-position: center !important;
+    -webkit-mask-size: contain !important;
+    mask-size: contain !important;
+    transition: transform 0.3s ease, background-color 0.2s ease !important;
+    will-change: transform;
+}
+
+#kt_app_sidebar .menu-item.show > .menu-link .menu-arrow:after {
+    transform: rotate(90deg) !important;
+    background-color: #FFFFFF !important;
+}
+
+#kt_app_sidebar .menu-item.here > .menu-link .menu-arrow:after {
+    background-color: var(--demo1-sidebar-active-text, #FFFFFF) !important;
+}
+
+/* Hover State (Demo 1) */
+#kt_app_sidebar .menu-link:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+#kt_app_sidebar .menu-link:hover:not(.active) .menu-title {
+    color: var(--demo1-sidebar-active-text) !important;
+}
+#kt_app_sidebar .menu-link:hover:not(.active) .menu-icon i {
+    color: var(--demo1-sidebar-primary) !important;
+}
+#kt_app_sidebar .menu-link:hover:not(.active) .menu-arrow:after {
+    background-color: var(--demo1-sidebar-active-text, #FFFFFF) !important;
+}
+
+/* Active State (Root Leaf Item) */
+#kt_app_sidebar .menu > .menu-item > .menu-link.active,
+#kt_app_sidebar .menu > .menu-item:not(.menu-accordion) > .menu-link.active {
+    background-color: var(--demo1-sidebar-primary) !important;
+    box-shadow: 0 4px 14px rgba(var(--demo1-sidebar-primary-rgb), 0.35) !important;
+}
+#kt_app_sidebar .menu > .menu-item > .menu-link.active .menu-title,
+#kt_app_sidebar .menu > .menu-item:not(.menu-accordion) > .menu-link.active .menu-title {
+    color: var(--demo1-sidebar-active-text) !important;
+    font-weight: 600 !important;
+}
+#kt_app_sidebar .menu > .menu-item > .menu-link.active .menu-icon i,
+#kt_app_sidebar .menu > .menu-item:not(.menu-accordion) > .menu-link.active .menu-icon i {
+    color: var(--demo1-sidebar-active-text) !important;
+}
+
+/* Accordion Open / Here State */
+#kt_app_sidebar .menu-item.menu-accordion.show > .menu-link,
+#kt_app_sidebar .menu-item.menu-accordion.here > .menu-link {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+#kt_app_sidebar .menu-item.menu-accordion.show > .menu-link .menu-title,
+#kt_app_sidebar .menu-item.menu-accordion.here > .menu-link .menu-title {
+    color: var(--demo1-sidebar-active-text) !important;
+}
+#kt_app_sidebar .menu-item.menu-accordion.show > .menu-link .menu-icon i,
+#kt_app_sidebar .menu-item.menu-accordion.here > .menu-link .menu-icon i {
+    color: var(--demo1-sidebar-primary) !important;
+}
+
+/* Submenu Accordion (with Demo 1 signature hierarchy line) */
+#kt_app_sidebar .menu-sub-accordion {
+    padding-left: 10px !important;
+    margin-left: 20px !important;
+    border-left: 1px solid var(--demo1-sidebar-border) !important;
+    position: relative !important;
+    display: none;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+#kt_app_sidebar .menu-item.show > .menu-sub-accordion {
+    display: flex !important;
+}
+
+/* Submenu Items */
+#kt_app_sidebar .menu-sub-accordion .menu-link {
+    padding: 8px 10px !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    gap: 14px !important;
+}
+
+#kt_app_sidebar .menu-sub-accordion .menu-link .menu-title {
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    color: var(--demo1-sidebar-text) !important;
+}
+
+#kt_app_sidebar .menu-sub-accordion .menu-bullet {
+    width: 6px !important;
+    height: 6px !important;
+    border-radius: 50% !important;
+    background-color: #52525b !important;
+    margin-left: -3px !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+}
+
+#kt_app_sidebar .menu-sub-accordion .menu-bullet .bullet-dot {
+    display: none !important;
+}
+
+/* Submenu Hover */
+#kt_app_sidebar .menu-sub-accordion .menu-link:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+#kt_app_sidebar .menu-sub-accordion .menu-link:hover:not(.active) .menu-title {
+    color: var(--demo1-sidebar-primary) !important;
+}
+#kt_app_sidebar .menu-sub-accordion .menu-link:hover:not(.active) .menu-bullet {
+    background-color: var(--demo1-sidebar-primary) !important;
+    transform: scale(1.3) !important;
+}
+
+/* Submenu Active (Demo 1 pill) */
+#kt_app_sidebar .menu-sub-accordion .menu-link.active {
+    background-color: rgba(var(--demo1-sidebar-primary-rgb), 0.15) !important;
+    border: 1px solid rgba(var(--demo1-sidebar-primary-rgb), 0.25) !important;
+    box-shadow: none !important;
+}
+#kt_app_sidebar .menu-sub-accordion .menu-link.active .menu-title {
+    color: var(--demo1-sidebar-primary) !important;
+    font-weight: 600 !important;
+}
+#kt_app_sidebar .menu-sub-accordion .menu-link.active .menu-bullet {
+    background-color: var(--demo1-sidebar-primary) !important;
+    transform: scale(1.4) !important;
+}
+
+/* ==========================================================================
+   Collapsed Sidebar State (body[data-kt-app-sidebar-minimize="on"] & body.kt-sidebar-collapse)
+   ========================================================================== */
+
+@media (min-width: 992px) {
+    /* Layout adaptation for main page and header when collapsed */
+    body[data-kt-app-sidebar-minimize="on"] .app-wrapper,
+    body.kt-sidebar-collapse .app-wrapper {
+        margin-left: var(--demo1-sidebar-width-collapse) !important;
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        will-change: margin-left;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] .app-header,
+    body.kt-sidebar-collapse .app-header {
+        left: var(--demo1-sidebar-width-collapse) !important;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        will-change: left;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar,
+    body.kt-sidebar-collapse #kt_app_sidebar {
+        width: var(--demo1-sidebar-width-collapse) !important;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease !important;
+        will-change: width;
+    }
+
+    /* Logo state when collapsed (not hovered) */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-logo,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-logo {
+        padding: 0 10px !important;
+        justify-content: center !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-logo a,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-logo a {
+        justify-content: center !important;
+        width: 100% !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-logo-default,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-logo-default {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        transition: opacity 0.2s ease, visibility 0.2s ease !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-logo-minimize,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-logo-minimize {
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: block !important;
+        height: 26px !important;
+        width: auto !important;
+        margin: 0 auto !important;
+        transition: opacity 0.25s ease !important;
+    }
+
+    /* Menu container & scrollbar when collapsed (not hovered) */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-wrapper,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) #kt_app_sidebar_menu_scroll,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) #kt_app_sidebar_menu_scroll {
+        margin: 15px 0 !important;
+        padding: 0 8px !important;
+        width: 100% !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .app-sidebar-menu,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .app-sidebar-menu {
+        padding: 0.5rem 0 !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu {
+        width: 100% !important;
+        align-items: center !important;
+        gap: 14px !important;
+    }
+
+    /* Hide text labels, arrows, accordions, bullets, and section headers */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-link .menu-title,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-link .menu-title,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-link .menu-arrow,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-link .menu-arrow,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-link .menu-badge,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-link .menu-badge,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-heading,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-heading,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-sub,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-sub,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu-sub-accordion,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu-sub-accordion {
+        display: none !important;
+    }
+
+    /* Root menu item */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item {
+        width: 100% !important;
+        align-items: center !important;
+        display: flex !important;
+        justify-content: center !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* Compact 44x44 centered tile for menu-link */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        max-width: 44px !important;
+        padding: 0 !important;
+        margin: 0 auto !important;
+        border-radius: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+        gap: 0 !important;
+        box-sizing: border-box !important;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease !important;
+    }
+
+    /* Centered icon inside tile */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link .menu-icon,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link .menu-icon {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 44px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link .menu-icon i,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link .menu-icon i {
+        font-size: 20px !important;
+        line-height: 1 !important;
+        margin: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: var(--demo1-sidebar-text-muted) !important;
+    }
+
+    /* Hover tile when collapsed */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link:hover:not(.active),
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link:hover:not(.active) {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link:hover:not(.active) .menu-icon i,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link:hover:not(.active) .menu-icon i {
+        color: var(--demo1-sidebar-active-text) !important;
+    }
+
+    /* Active / Selected item in collapsed state */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link.active,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item.here > .menu-link,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item.show > .menu-link,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link.active,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item.here > .menu-link,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item.show > .menu-link {
+        background-color: var(--demo1-sidebar-primary) !important;
+        box-shadow: 0 4px 14px rgba(var(--demo1-sidebar-primary-rgb), 0.35) !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link.active .menu-icon i,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item.here > .menu-link .menu-icon i,
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:not(:hover) .menu > .menu-item.show > .menu-link .menu-icon i,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item > .menu-link.active .menu-icon i,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item.here > .menu-link .menu-icon i,
+    body.kt-sidebar-collapse #kt_app_sidebar:not(:hover) .menu > .menu-item.show > .menu-link .menu-icon i {
+        color: var(--demo1-sidebar-active-text) !important;
+    }
+
+    /* Hover Expansion: when hovering over minimized sidebar */
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover {
+        width: var(--demo1-sidebar-width) !important;
+        box-shadow: 0 0 32px rgba(0, 0, 0, 0.45) !important;
+        z-index: 106 !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .app-sidebar-logo,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .app-sidebar-logo {
+        padding: 0 1.5rem !important;
+        justify-content: space-between !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .app-sidebar-logo-default,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .app-sidebar-logo-default {
+        display: block !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .app-sidebar-logo-minimize,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .app-sidebar-logo-minimize {
+        display: none !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .app-sidebar-wrapper,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .app-sidebar-wrapper {
+        width: var(--demo1-sidebar-width) !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover #kt_app_sidebar_menu_scroll,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover #kt_app_sidebar_menu_scroll {
+        margin: 1.25rem 0.5rem 1.25rem 0.75rem !important;
+        padding: 0 !important;
+        width: auto !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu {
+        width: 100% !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-item,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-item {
+        width: 100% !important;
+        align-items: stretch !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-link,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-link {
+        width: 100% !important;
+        height: auto !important;
+        padding: 9px 12px !important;
+        margin: 0 !important;
+        justify-content: flex-start !important;
+        gap: 12px !important;
+        border-radius: 8px !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-link .menu-icon,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-link .menu-icon {
+        width: 20px !important;
+        height: auto !important;
+        margin-right: 0 !important;
+        justify-content: flex-start !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-link .menu-title,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-link .menu-title {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-link .menu-arrow,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-link .menu-arrow {
+        display: flex !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+
+    body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar:hover .menu-item.show > .menu-sub-accordion,
+    body.kt-sidebar-collapse #kt_app_sidebar:hover .menu-item.show > .menu-sub-accordion {
+        display: flex !important;
+    }
+}
+
+/* Toggle icon direction */
+#kt_app_sidebar .app-sidebar-toggle i {
+    transition: transform 0.3s ease !important;
+}
+
+body[data-kt-app-sidebar-minimize="on"] #kt_app_sidebar .app-sidebar-toggle i,
+body.kt-sidebar-collapse #kt_app_sidebar .app-sidebar-toggle i,
+#kt_app_sidebar .app-sidebar-toggle.active i {
+    transform: rotate(180deg) !important;
+}
+
+body:not([data-kt-app-sidebar-minimize="on"]):not(.kt-sidebar-collapse) #kt_app_sidebar .app-sidebar-toggle:not(.active) i {
+    transform: rotate(0deg) !important;
+}
+
+/* ==========================================================================
+   METRONIC DEMO 1 - TOPBAR USER AVATAR & DROPDOWNS
+   ========================================================================== */
+.topbar-avatar-user {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 50% !important;
+    border: 2px solid #22c55e !important; /* Demo 1 green ring */
+    object-fit: cover !important;
+    object-position: center !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.topbar-avatar-user-initial {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    border-radius: 50% !important;
+    border: 2px solid #22c55e !important;
+    background-color: var(--bs-primary-light, #f1faff) !important;
+    color: var(--bs-primary, #009ef7) !important;
+    font-weight: 700 !important;
+    font-size: 0.875rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+#kt_header_user_menu_toggle .shrink-0:hover .topbar-avatar-user,
+#kt_header_user_menu_toggle .shrink-0:hover .topbar-avatar-user-initial,
+#kt_header_user_menu_toggle .shrink-0.show .topbar-avatar-user,
+#kt_header_user_menu_toggle .shrink-0.show .topbar-avatar-user-initial,
+#kt_header_user_menu_toggle .shrink-0.open .topbar-avatar-user,
+#kt_header_user_menu_toggle .shrink-0.open .topbar-avatar-user-initial {
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2) !important;
+    transform: scale(1.04) !important;
+}
+
+/* User Menu styling Demo 1 */
+#kt_header_user_menu_toggle .menu-sub-dropdown {
+    width: 275px !important;
+    border-radius: 0.75rem !important;
+    border: 1px solid var(--bs-border-color, #f1f1f4) !important;
+    box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+#kt_header_user_menu_toggle .menu-sub-dropdown .menu-link {
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+#kt_header_user_menu_toggle .menu-sub-dropdown .menu-link:hover {
+    background-color: var(--bs-gray-100, #f9f9f9) !important;
+    color: var(--bs-primary, #009ef7) !important;
+}
+
+/* Notifications Menu styling Demo 1 */
+#kt_header_notifications_menu .menu-sub-dropdown {
+    border-radius: 0.75rem !important;
+    border: 1px solid var(--bs-border-color, #f1f1f4) !important;
+    box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ==========================================================================
+   DARK MODE ADJUSTMENTS FOR TOPBAR & DROPDOWNS
+   ========================================================================== */
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .menu-sub-dropdown,
+[data-bs-theme="dark"] #kt_header_notifications_menu .menu-sub-dropdown {
+    background-color: var(--bs-app-header-base-bg-color, #1E1E2D) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.45) !important;
+}
+
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .menu-sub-dropdown .menu-link {
+    color: #DBDFE9 !important;
+}
+
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .menu-sub-dropdown .menu-link:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: var(--bs-primary, #1B84FF) !important;
+}
+
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .topbar-avatar-user-initial {
+    background-color: #1E1E2D !important;
+    color: var(--bs-primary, #1B84FF) !important;
+}
+
+[data-bs-theme="dark"] #kt_header_notifications_menu .border-bottom,
+[data-bs-theme="dark"] #kt_header_notifications_menu .border-top {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-bs-theme="dark"] #kt_header_notifications_menu .text-gray-900 {
+    color: #FFFFFF !important;
+}
+
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .text-gray-900 {
+    color: #FFFFFF !important;
+}
+
+[data-bs-theme="dark"] #kt_header_user_menu_toggle .text-gray-700 {
+    color: #DBDFE9 !important;
+}
+
+[data-bs-theme="dark"] .separator {
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-bs-theme="dark"] #kt_app_header .btn.btn-custom {
+    color: var(--app-header-text, #FFFFFF) !important;
+}
+
+[data-bs-theme="dark"] #kt_app_header .btn.btn-custom:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: var(--bs-primary, #1B84FF) !important;
+}
+
+[data-bs-theme="dark"] #kt_app_header .btn.btn-custom .ki-duotone {
+    color: inherit !important;
+}
+
+
+
