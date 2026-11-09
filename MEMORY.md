@@ -581,6 +581,9 @@ Este documento es la **fuente única de verdad (Single Source of Truth)** sobre 
 | **ReportesLogins** (`ReportesLogins.php`) | `Reportes_logins_model.php` | `pages/reportes_logins/index.php` | Historial de conexiones IP, navegador, país y ciudad. |
 | **ReportesSesionesActivas** (`ReportesSesionesActivas.php`) | `Reportes_sesiones_activas_model.php` | `pages/reportes_sesiones_activas/index.php` | Monitor en vivo de sesiones en archivos CI con expulsión y baneo remoto. |
 | **ReportesErrores** (`ReportesErrores.php`) | `Reportes_errores_model.php` | `pages/reportes_errores/index.php` | Visor de solo lectura de `application/logs`, filtros, DataTables y detalle; permiso inicial rol `1000`. |
+| **Organizadores** (`Organizadores.php`) | `Organizador_model.php` | `pages/organizadores/index.php` | CRUD admin de tenants M01: listado, edición, estado, cambio de subdominio y borrado lógico. Los permisos se registran solo para el rol `1000`. |
+| **MiVitrina** (`MiVitrina.php`) | `Organizador_model.php` | `pages/mi_vitrina/index.php` | Autoservicio M01 para usuarios autenticados: alta de vitrina/subdominio, edición de datos y cambio de slug. URL libre `mi-vitrina` (alias retrocompatible `mi-tienda`). |
+| **Publico** (`Publico.php`) | `Tenant.php` (librería) | `publico/en_construccion.php` | Sitio público del tenant por host o `/sitio/<slug>`. M01 publica un placeholder; no exige sesión ni permisos. |
 | **Media** (`Media.php`) | N/A | N/A (Stream binario) | Controlador virtual para servir de forma segura imágenes y recursos internos. |
 
 ---
@@ -616,6 +619,8 @@ Este documento es la **fuente única de verdad (Single Source of Truth)** sobre 
 16. **`cab_configuracion_pasarelas`**: Configuración de Stripe/BTCPay, sin credenciales sembradas.
 17. **`cab_mov_btcpay`** y **`cab_mov_btcpay_webhooks`**: Auditoría forense de invoices y eventos BTCPay.
 18. **`cab_mov_stripe`** y **`cab_mov_stripe_webhooks`**: Auditoría y deduplicación de sesiones/eventos Stripe.
+19. **`rif_organizadores`**: Tenants M01 (`org_id`, `org_usuario_id` UNIQUE, `org_slug` UNIQUE, `org_nombre_publico`, `org_email`, `org_telefono`, `org_status`, `org_verificado`, `org_eliminado`, timestamps). Un usuario = una tienda. `org_usuario_id` es referencia lógica a `cab_usuarios.usu_id` sin FK física.
+20. **`rif_dominios`**: Hosts de cada tenant (`dom_id`, `dom_org_id` FK CASCADE, `dom_host` UNIQUE, `dom_tipo` subdominio/personalizado, `dom_verificado`, `dom_token`, `dom_ssl_status`, `dom_status`, timestamps). La resolución de tenant consulta esta tabla; nunca confía en el `Host` por sí solo.
 ---
 
 ## 5. Guía de Extensión para Nuevos Sistemas
@@ -699,3 +704,14 @@ contraseñas ni tokens:
 - **Colores**: primary editar/ver/reutilizar; danger eliminar/banear; warning desactivar/cerrar; success activar/asignar/usar.
 - **Excepción**: badges de estado protegido/no disponible pueden conservarse.
 - **Validación**: revisar todas las tablas del módulo antes de cerrar un CRUD; `php -l`, `node --check` y consistencia visual claro/oscuro.
+
+### ADR-032: Núcleo multi-tenant por subdominio — M01 (2026-11-09)
+- **Decisión**: Sortea2 opera como SaaS multi-tenant sobre una sola base de datos. Cada organizador se identifica por `rif_organizadores.org_id`; sus hosts se resuelven contra `rif_dominios.dom_host`. El panel administrativo vive en el host principal (`APP_BASE_URL`); el sitio público en `<slug>.<TENANT_BASE_DOMAIN>`.
+- **Resolución**: `application/libraries/Tenant.php` consulta la BD por host (nunca confía en el subdominio) y expone `base_url`, `url()`, `asset()` y `theme()`. En desarrollo se habilitan `/sitio/<slug>` y `?org=<slug>` con `TENANT_ALLOW_PATH_RESOLUTION=true`; en producción debe ser `false`.
+- **Aislamiento**: `application/hooks/Tenant_host_guard.php` (`pre_controller`) permite en hosts tenant solo `Publico`, `Media` y `Errors`; cualquier controlador administrativo o de login devuelve 404. Hosts no registrados (incluido `evil.example.com`) también devuelven 404 por deny-by-default.
+- **Modelo**: `rif_organizadores` (`org_usuario_id` UNIQUE, `org_slug` UNIQUE, `org_status`, `org_verificado`, `org_eliminado`) y `rif_dominios` (`dom_host` UNIQUE, `dom_tipo`, `dom_verificado`, `dom_status`, FK CASCADE). Un usuario = una vitrina. El alta es autoservicio en `/mi-vitrina` (alias retrocompatible `/mi-tienda`); el admin gestiona en `/organizadores` (menú RBAC, permisos solo rol `1000`).
+- **Slugs**: 3-63 caracteres, regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`; lista de reservados centralizada en `Organizador_model::$slugs_reservados`. Se rechazan mayúsculas, guiones consecutivos, guiones en extremos y caracteres no permitidos con HTTP 422.
+- **Tema**: `Tenant::theme()` devuelve valores por defecto hasta M04. El sitio público M01 es un placeholder "en construcción", sin formularios ni CSRF.
+- **Seguridad**: CSRF global en formularios admin; `MiVitrina` deriva el propietario de la sesión y nunca acepta `org_id` del request; bitácora `ORGANIZADOR_*` en toda mutación; `db_debug` debe estar desactivado en producción.
+- **Riesgos/pendientes**: el borrado lógico bloquea la recreación por UNIQUE (política de restauración pendiente); dominios personalizados quedan para una fase posterior; wildcard DNS/TLS es requisito operativo; `TENANT_BASE_DOMAIN` debe existir en el `.env` de producción. Security documentó riesgos residuales de hosts/plantilla `.env`/reactivación de dominio.
+- **Validación**: migración aplicada dos veces sin duplicados; BACKEND/FRONTEND con `php -l`; SECURITY `ACCEPTED_WITH_RISKS`; QA `ACCEPTED` (hosts, RBAC, CSRF, DataTables, duplicados, slugs y limpieza). Sin datos temporales en la BD.

@@ -38,6 +38,8 @@ class MY_Controller extends CI_Controller
         'mantenimiento',
         'media',
         'errors',
+        'mi-vitrina',
+        'mi-tienda', // alias retrocompatible
     ];
 
     /**
