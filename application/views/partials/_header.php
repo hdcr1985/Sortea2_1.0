@@ -225,6 +225,15 @@
                         </div>
 
                         <div class="menu-item px-3">
+                            <a href="<?php echo base_url('mis-rifas'); ?>" class="menu-link px-3 d-flex align-items-center">
+                                <i class="ki-duotone ki-gift fs-3 text-gray-600 me-2">
+                                    <span class="path1"></span><span class="path2"></span>
+                                </i>
+                                <span class="menu-title fs-7">Mis Rifas</span>
+                            </a>
+                        </div>
+
+                        <div class="menu-item px-3">
                             <a href="<?php echo base_url('configuracion'); ?>" class="menu-link px-3 d-flex align-items-center">
                                 <i class="ki-duotone ki-setting-2 fs-3 text-gray-600 me-2">
                                     <span class="path1"></span><span class="path2"></span>

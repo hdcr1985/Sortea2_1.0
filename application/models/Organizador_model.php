@@ -157,14 +157,32 @@ class Organizador_model extends CI_Model
      * @param  string $usuario_id
      * @return array|null
      */
-    public function get_por_usuario($usuario_id)
+    public function get_por_usuario($usuario_id, $incluir_inactivos = FALSE)
     {
-        return $this->db
+        $this->db
             ->where('org_usuario_id', (string)$usuario_id)
-            ->where('org_eliminado', 0)
+            ->where('org_eliminado', 0);
+
+        if (!$incluir_inactivos) {
+            $this->db->where('org_status', 1);
+        }
+
+        return $this->db
             ->limit(1)
             ->get($this->table)
             ->row_array();
+    }
+
+    /**
+     * Devuelve el organizador del usuario aunque esté suspendido.
+     * Se usa para mostrar el motivo de suspensión en Mi Vitrina.
+     *
+     * @param  string $usuario_id
+     * @return array|null
+     */
+    public function get_por_usuario_incluir_inactivo($usuario_id)
+    {
+        return $this->get_por_usuario($usuario_id, TRUE);
     }
 
     /**

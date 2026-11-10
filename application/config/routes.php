@@ -45,6 +45,8 @@ $route['sin-permisos']               = 'Errors/sin_permisos';
 $route['mantenimiento']              = 'Errors/mantenimiento';
 $route['media/usuario/(:any)']       = 'Media/usuario/$1';
 $route['media/theme/(:any)']         = 'Media/theme/$1';
+$route['media/rifa/(:num)']          = 'Media/rifa/$1';
+$route['media/rifa-imagen/(:num)']   = 'Media/rifa_imagen/$1';
 $route['notificaciones/feed']        = 'Notificaciones/feed';
 $route['notificaciones/marcar-leida/(:num)'] = 'Notificaciones/marcar_leida/$1';
 $route['notificaciones/marcar-todas'] = 'Notificaciones/marcar_todas';
@@ -71,6 +73,42 @@ $route['mi-tienda/crear']        = 'MiVitrina/crear';
 $route['mi-tienda/actualizar']   = 'MiVitrina/actualizar';
 $route['mi-tienda/cambiar-slug'] = 'MiVitrina/cambiar_slug';
 $route['mi-tienda/ver']          = 'MiVitrina/ver';
+
+// ── M03 Rifas — autoservicio del organizador ─────────────────
+$route['mis-rifas']                                   = 'MisRifas/index';
+$route['mis-rifas/tabla']                             = 'MisRifas/tabla';
+$route['mis-rifas/datos/(:num)']                      = 'MisRifas/datos/$1';
+$route['mis-rifas/crear']                             = 'MisRifas/crear';
+$route['mis-rifas/actualizar/(:num)']                 = 'MisRifas/actualizar/$1';
+$route['mis-rifas/eliminar/(:num)']                   = 'MisRifas/eliminar/$1';
+$route['mis-rifas/publicar/(:num)']                   = 'MisRifas/publicar/$1';
+$route['mis-rifas/pausar/(:num)']                     = 'MisRifas/pausar/$1';
+$route['mis-rifas/reactivar/(:num)']                  = 'MisRifas/reactivar/$1';
+$route['mis-rifas/solicitar-cancelacion/(:num)']      = 'MisRifas/solicitar_cancelacion/$1';
+$route['mis-rifas/finalizar/(:num)']                  = 'MisRifas/finalizar/$1';
+$route['mis-rifas/imagenes/(:num)']                   = 'MisRifas/imagenes/$1';
+$route['mis-rifas/imagen-subir/(:num)']               = 'MisRifas/imagen_subir/$1';
+$route['mis-rifas/imagen-portada/(:num)/(:num)']      = 'MisRifas/imagen_portada/$1/$2';
+$route['mis-rifas/imagen-eliminar/(:num)/(:num)']     = 'MisRifas/imagen_eliminar/$1/$2';
+$route['mis-rifas/tickets/(:num)']                    = 'MisRifas/tickets/$1';
+$route['mis-rifas/tickets-mapa/(:num)']               = 'MisRifas/tickets_mapa/$1';
+$route['mis-rifas/bloquear-numeros/(:num)']           = 'MisRifas/bloquear_numeros/$1';
+$route['mis-rifas/liberar-numeros/(:num)']            = 'MisRifas/liberar_numeros/$1';
+$route['mis-rifas/venta-presencial/(:num)']           = 'MisRifas/venta_presencial/$1';
+
+// Administración de rifas: resumen de tickets (M03.3)
+$route['rifas/tickets/(:num)']                        = 'Rifas/tickets/$1';
+
+// ── M04 Monedas y tasas de cambio ─────────────────────────
+$route['monedas']                              = 'Monedas/index';
+$route['monedas/tabla']                        = 'Monedas/tabla';
+$route['monedas/datos/(:num)']                 = 'Monedas/datos/$1';
+$route['monedas/crear']                        = 'Monedas/crear';
+$route['monedas/actualizar/(:num)']            = 'Monedas/actualizar/$1';
+$route['monedas/eliminar/(:num)']              = 'Monedas/eliminar/$1';
+$route['monedas/cambiar-status/(:num)']        = 'Monedas/cambiar_status/$1';
+$route['monedas/tasas/(:num)']                 = 'Monedas/tasas/$1';
+$route['monedas/guardar-tasa/(:num)']          = 'Monedas/guardar_tasa/$1';
 
 $route['sitio/(:any)']           = 'Publico/index/$1';
 

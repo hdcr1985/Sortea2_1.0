@@ -40,6 +40,7 @@ class MY_Controller extends CI_Controller
         'errors',
         'mi-vitrina',
         'mi-tienda', // alias retrocompatible
+        'mis-rifas', // autoservicio del organizador (M03)
     ];
 
     /**
@@ -300,14 +301,40 @@ class MY_Controller extends CI_Controller
      */
     protected function bitacora($accion, $detalle = '')
     {
-        $this->db->insert('cab_bitacora', [
-            'bit_usuario'   => $this->usuario['usu_usuario'] ?? 'sistema',
-            'bit_date'      => date('Y-m-d H:i:s'),
-            'bit_accion'    => $accion,
-            'bit_detalles'  => $detalle,
-            'bit_navegador' => $this->input->user_agent(),
-            'bit_ip'        => app_resolver_client_ip($this->input),
-        ]);
+        // cab_bitacora.bit_detalles es VARCHAR(255). Truncar evita fallos en
+        // entornos estrictos y mantiene la trazabilidad de la mutación.
+        $detalle = (string)$detalle;
+        if (function_exists('mb_substr')) {
+            $detalle = mb_substr($detalle, 0, 255, 'UTF-8');
+        } else {
+            $detalle = substr($detalle, 0, 255);
+        }
+
+        // CI3 termina el proceso con exit(8) si db_debug está activo y la
+        // escritura falla. La auditoría no debe romper la mutación principal.
+        $debug_previo = $this->db->db_debug;
+        $this->db->db_debug = FALSE;
+
+        try {
+            $ok = $this->db->insert('cab_bitacora', [
+                'bit_usuario'   => $this->usuario['usu_usuario'] ?? 'sistema',
+                'bit_date'      => date('Y-m-d H:i:s'),
+                'bit_accion'    => $accion,
+                'bit_detalles'  => $detalle,
+                'bit_navegador' => $this->input->user_agent(),
+                'bit_ip'        => app_resolver_client_ip($this->input),
+            ]);
+            $error = $this->db->error();
+        } catch (Throwable $e) {
+            $ok    = FALSE;
+            $error = ['code' => -1, 'message' => ''];
+        } finally {
+            $this->db->db_debug = $debug_previo;
+        }
+
+        if (!$ok || !empty($error['code'])) {
+            log_message('error', 'No se pudo registrar el evento en cab_bitacora.');
+        }
     }
 
     /**

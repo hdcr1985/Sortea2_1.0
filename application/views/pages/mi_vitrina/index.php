@@ -22,6 +22,7 @@ foreach (['perfil', 'organizador', 'tenant', 'tenant_data'] as $clave_vitrina) {
 }
 
 $tiene_vitrina = is_array($mi_vitrina);
+$suspendida = !empty($suspendida);
 
 $org_nombre = $tiene_vitrina ? trim((string)($mi_vitrina['org_nombre_publico'] ?? '')) : '';
 $org_slug = $tiene_vitrina ? trim((string)($mi_vitrina['org_slug'] ?? '')) : '';
@@ -167,11 +168,99 @@ $plan_progreso = 0;
 if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0) {
     $plan_progreso = (int)min(100, max(0, round(($plan_usadas / $plan_limite) * 100)));
 }
+
+// ─────────────────────────────────────────────────────────
+// Lotes/asignaciones disponibles del organizador (M02.1).
+// Se conservan las claves plan/usadas/limite/restantes para
+// compatibilidad con la tarjeta histórica.
+// ─────────────────────────────────────────────────────────
+$plan_lotes = (isset($plan_info['asignaciones']) && is_array($plan_info['asignaciones']))
+    ? array_values($plan_info['asignaciones'])
+    : [];
+
+$plan_lotes_render = [];
+foreach ($plan_lotes as $lote) {
+    if (!is_array($lote)) {
+        continue;
+    }
+
+    $lote_tipo = strtolower(trim((string)($lote['plan_tipo'] ?? $plan_tipo)));
+    $lote_ilimitado = !empty($lote['ilimitado']) || $lote_tipo === 'ilimitado';
+
+    $lote_cantidad = $lote_ilimitado
+        ? null
+        : (int)($lote['asig_cantidad'] ?? 0);
+    $lote_usadas = (int)($lote['asig_rifas_usadas'] ?? 0);
+    $lote_restantes = $lote_ilimitado
+        ? null
+        : (int)($lote['restantes'] ?? max(0, $lote_cantidad - $lote_usadas));
+
+    $lote_inicio = '';
+    if (!empty($lote['asig_inicio']) && strtoupper(trim((string)$lote['asig_inicio'])) !== 'NULL') {
+        $lote_inicio_ts = strtotime((string)$lote['asig_inicio']);
+        $lote_inicio = $lote_inicio_ts ? date('d/m/Y', $lote_inicio_ts) : (string)$lote['asig_inicio'];
+    }
+
+    $lote_fin = 'Sin caducidad';
+    if (!empty($lote['asig_fin']) && strtoupper(trim((string)$lote['asig_fin'])) !== 'NULL') {
+        $lote_fin_ts = strtotime((string)$lote['asig_fin']);
+        $lote_fin = $lote_fin_ts ? date('d/m/Y', $lote_fin_ts) : (string)$lote['asig_fin'];
+    }
+
+    $lote_estado = strtolower(trim((string)($lote['asig_estado'] ?? 'activa')));
+    $lote_estado_clase = 'success';
+    $lote_estado_texto = 'Activa';
+    if ($lote_estado === 'vencida') {
+        $lote_estado_clase = 'warning';
+        $lote_estado_texto = 'Vencida';
+    } elseif ($lote_estado === 'cancelada') {
+        $lote_estado_clase = 'danger';
+        $lote_estado_texto = 'Cancelada';
+    } elseif ($lote_estado === 'reemplazada') {
+        $lote_estado_clase = 'secondary';
+        $lote_estado_texto = 'Reemplazada';
+    }
+
+    $plan_lotes_render[] = [
+        'plan'             => trim((string)($lote['plan_nombre'] ?? $plan_nombre)),
+        'numeracion'       => trim((string)($lote['num_label'] ?? '')),
+        'ilimitado'        => $lote_ilimitado,
+        'cantidad'         => $lote_cantidad,
+        'usadas'           => $lote_usadas,
+        'restantes'        => $lote_restantes,
+        'uso_texto'        => $lote_ilimitado
+            ? ($lote_usadas . ' usadas · Ilimitado')
+            : ($lote_usadas . ' / ' . (string)$lote_cantidad),
+        'restantes_texto'  => $lote_ilimitado ? 'Ilimitado' : (string)$lote_restantes,
+        'cantidad_texto'   => $lote_ilimitado ? 'Ilimitado' : (string)$lote_cantidad,
+        'inicio'           => $lote_inicio,
+        'fin'              => $lote_fin,
+        'estado_clase'     => $lote_estado_clase,
+        'estado_texto'     => $lote_estado_texto,
+    ];
+}
 ?>
 
 <div class="d-flex flex-column gap-7 gap-lg-10">
 
-<?php if (!$tiene_vitrina): ?>
+<?php if ($suspendida): ?>
+    <!--begin::Vitrina suspendida-->
+    <div class="card card-flush shadow-sm border border-warning border-dashed">
+        <div class="card-body d-flex align-items-start gap-4 p-7">
+            <i class="ki-duotone ki-information-2 fs-2x text-warning">
+                <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+            </i>
+            <div>
+                <h3 class="fw-bold text-gray-900 mb-2">Tu vitrina está suspendida</h3>
+                <p class="text-muted fs-6 mb-0">
+                    Tu tienda y sus rifas no están disponibles públicamente.
+                    Contacta al administrador para revisar el estado de tu cuenta.
+                </p>
+            </div>
+        </div>
+    </div>
+    <!--end::Vitrina suspendida-->
+<?php elseif (!$tiene_vitrina): ?>
     <!--begin::Onboarding: crear vitrina-->
     <div class="card card-flush shadow-sm">
         <div class="card-header border-0 pt-6">
@@ -442,54 +531,119 @@ if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0) {
 
         <div class="card-body pt-2">
             <?php if ($plan_tiene): ?>
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-5">
-                    <span class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_nombre, ENT_QUOTES, 'UTF-8'); ?></span>
-                    <span class="badge badge-light-primary fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_tipo_badge, ENT_QUOTES, 'UTF-8'); ?></span>
-                    <span class="badge badge-light-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
-                </div>
+                <?php if (!empty($plan_lotes_render)): ?>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-5">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <span class="fw-bold text-gray-900 fs-5">Lotes disponibles</span>
+                            <span class="badge badge-light-primary fw-bold px-3 py-2">
+                                <?php echo count($plan_lotes_render); ?>
+                                <?php echo count($plan_lotes_render) === 1 ? 'lote activo' : 'lotes activos'; ?>
+                            </span>
+                        </div>
+                        <span class="badge badge-light-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> fw-bold px-3 py-2">
+                            <?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
 
-                <div class="row g-5">
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
-                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Uso</div>
-                            <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_uso_texto, ENT_QUOTES, 'UTF-8'); ?></div>
-                            <?php if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0): ?>
-                                <div class="progress h-6px w-100 bg-light-primary mt-3">
-                                    <div class="progress-bar bg-primary"
-                                        role="progressbar"
-                                        style="width: <?php echo (int)$plan_progreso; ?>%"
-                                        aria-valuenow="<?php echo (int)$plan_progreso; ?>"
-                                        aria-valuemin="0"
-                                        aria-valuemax="100"></div>
+                    <div class="table-responsive">
+                        <table class="table table-row-dashed table-row-gray-200 align-middle gs-0 gy-4">
+                            <thead>
+                                <tr class="text-start text-gray-500 fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-200">
+                                    <th scope="col" class="min-w-180px">Plan</th>
+                                    <th scope="col" class="min-w-140px">Numeración</th>
+                                    <th scope="col" class="min-w-110px">Cantidad</th>
+                                    <th scope="col" class="min-w-110px">Usadas</th>
+                                    <th scope="col" class="min-w-110px">Restantes</th>
+                                    <th scope="col" class="min-w-170px">Vigencia</th>
+                                    <th scope="col" class="min-w-110px text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-700 fw-semibold">
+                                <?php foreach ($plan_lotes_render as $lote_render): ?>
+                                    <tr>
+                                        <td class="fw-bold text-gray-900">
+                                            <?php echo htmlspecialchars($lote_render['plan'] !== '' ? $lote_render['plan'] : $plan_nombre, ENT_QUOTES, 'UTF-8'); ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($lote_render['numeracion'] !== ''): ?>
+                                                <span class="badge badge-light-primary fw-semibold px-3 py-2">
+                                                    <?php echo htmlspecialchars($lote_render['numeracion'], ENT_QUOTES, 'UTF-8'); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge badge-light-info fw-semibold px-3 py-2">Libre por rifa</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="fw-semibold text-gray-900">
+                                            <?php echo htmlspecialchars($lote_render['cantidad_texto'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($lote_render['uso_texto'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                        <td class="fw-semibold text-gray-900">
+                                            <?php echo htmlspecialchars($lote_render['restantes_texto'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </td>
+                                        <td class="fs-8">
+                                            <div class="text-gray-900 fw-semibold">Inicio: <?php echo htmlspecialchars($lote_render['inicio'] !== '' ? $lote_render['inicio'] : '—', ENT_QUOTES, 'UTF-8'); ?></div>
+                                            <div class="text-muted">Fin: <?php echo htmlspecialchars($lote_render['fin'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-light-<?php echo htmlspecialchars($lote_render['estado_clase'], ENT_QUOTES, 'UTF-8'); ?> fw-bold px-3 py-2">
+                                                <?php echo htmlspecialchars($lote_render['estado_texto'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-5">
+                        <span class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_nombre, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="badge badge-light-primary fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_tipo_badge, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="badge badge-light-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
+
+                    <div class="row g-5">
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                                <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Uso</div>
+                                <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_uso_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0): ?>
+                                    <div class="progress h-6px w-100 bg-light-primary mt-3">
+                                        <div class="progress-bar bg-primary"
+                                            role="progressbar"
+                                            style="width: <?php echo (int)$plan_progreso; ?>%"
+                                            aria-valuenow="<?php echo (int)$plan_progreso; ?>"
+                                            aria-valuemin="0"
+                                            aria-valuemax="100"></div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                                <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Restantes</div>
+                                <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_restantes_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                                <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Vigencia</div>
+                                <div class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_fin_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                                <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Estado</div>
+                                <div class="d-flex align-items-center gap-2 mt-1">
+                                    <span class="bullet bullet-dot bg-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> w-10px h-10px"></span>
+                                    <span class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
                                 </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
-                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Restantes</div>
-                            <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_restantes_texto, ENT_QUOTES, 'UTF-8'); ?></div>
-                        </div>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
-                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Vigencia</div>
-                            <div class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_fin_texto, ENT_QUOTES, 'UTF-8'); ?></div>
-                        </div>
-                    </div>
-
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
-                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Estado</div>
-                            <div class="d-flex align-items-center gap-2 mt-1">
-                                <span class="bullet bullet-dot bg-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> w-10px h-10px"></span>
-                                <span class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
                             </div>
                         </div>
                     </div>
-                </div>
+                <?php endif; ?>
 
                 <?php if (!$plan_puede_publicar): ?>
                     <div class="alert bg-light-warning border border-warning border-dashed d-flex align-items-start gap-3 mt-5 mb-0" role="alert">

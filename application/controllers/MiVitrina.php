@@ -37,6 +37,14 @@ class MiVitrina extends MY_Controller
         $perfil      = $this->Organizador_model->get_por_usuario($usuario_id);
         $base_domain = $this->Organizador_model->base_domain();
 
+        $suspendida = FALSE;
+        if (empty($perfil)) {
+            $inactivo = $this->Organizador_model->get_por_usuario_incluir_inactivo($usuario_id);
+            if (!empty($inactivo) && (int)$inactivo['org_status'] !== 1) {
+                $suspendida = TRUE;
+            }
+        }
+
         $url_publica = '';
         $host        = '';
         $plan_info   = NULL;
@@ -51,6 +59,7 @@ class MiVitrina extends MY_Controller
 
         $datos = [
             'perfil'      => $perfil,
+            'suspendida'  => $suspendida,
             'plan_info'   => $plan_info,
             'url_publica' => $url_publica,
             'host'        => $host,
@@ -89,6 +98,14 @@ class MiVitrina extends MY_Controller
         }
 
         $data    = $this->_recoger_post(TRUE);
+
+        $errores_escalares = $this->_validar_campos_escalares([
+            'org_nombre_publico', 'org_email', 'org_telefono', 'org_slug',
+        ]);
+        if (!empty($errores_escalares)) {
+            return $this->json(['ok' => FALSE, 'errores' => $errores_escalares], 422);
+        }
+
         $errores = $this->_validar($data, 0, TRUE);
 
         if (!empty($errores)) {
@@ -159,6 +176,14 @@ class MiVitrina extends MY_Controller
         }
 
         $data    = $this->_recoger_post(FALSE);
+
+        $errores_escalares = $this->_validar_campos_escalares([
+            'org_nombre_publico', 'org_email', 'org_telefono',
+        ]);
+        if (!empty($errores_escalares)) {
+            return $this->json(['ok' => FALSE, 'errores' => $errores_escalares], 422);
+        }
+
         $errores = $this->_validar($data, (int)$perfil['org_id'], FALSE);
 
         if (!empty($errores)) {
@@ -206,7 +231,16 @@ class MiVitrina extends MY_Controller
             return $this->json(['ok' => FALSE, 'msg' => 'No tienes una vitrina registrada.'], 404);
         }
 
-        $slug    = trim((string)$this->input->post('org_slug', TRUE));
+        $slug_raw = $this->input->post('org_slug', TRUE);
+
+        if (is_array($slug_raw)) {
+            return $this->json([
+                'ok'      => FALSE,
+                'errores' => ['org_slug' => 'Valor inválido.'],
+            ], 422);
+        }
+
+        $slug    = trim(is_scalar($slug_raw) ? (string)$slug_raw : '');
         $errores = $this->_validar_slug($slug, (int)$perfil['org_id']);
 
         if (!empty($errores)) {
@@ -274,16 +308,49 @@ class MiVitrina extends MY_Controller
     private function _recoger_post($incluir_slug = TRUE)
     {
         $data = [
-            'org_nombre_publico' => trim((string)$this->input->post('org_nombre_publico', TRUE)),
-            'org_email'          => trim((string)$this->input->post('org_email', TRUE)),
-            'org_telefono'       => trim((string)$this->input->post('org_telefono', TRUE)),
+            'org_nombre_publico' => trim($this->_post_escalar('org_nombre_publico')),
+            'org_email'          => trim($this->_post_escalar('org_email')),
+            'org_telefono'       => trim($this->_post_escalar('org_telefono')),
         ];
 
         if ($incluir_slug) {
-            $data['org_slug'] = trim((string)$this->input->post('org_slug', TRUE));
+            $data['org_slug'] = trim($this->_post_escalar('org_slug'));
         }
 
         return $data;
+    }
+
+    /**
+     * Rechaza campos POST enviados como array o valores no escalares.
+     *
+     * @param  array $campos
+     * @return array
+     */
+    private function _validar_campos_escalares(array $campos)
+    {
+        $errores = [];
+
+        foreach ($campos as $campo) {
+            $valor = $this->input->post($campo, TRUE);
+
+            if ($valor !== NULL && !is_scalar($valor)) {
+                $errores[$campo] = 'Valor inválido.';
+            }
+        }
+
+        return $errores;
+    }
+
+    /**
+     * @param  string $key
+     * @param  string $default
+     * @return string
+     */
+    private function _post_escalar($key, $default = '')
+    {
+        $valor = $this->input->post($key, TRUE);
+
+        return is_scalar($valor) ? (string)$valor : $default;
     }
 
     /**
