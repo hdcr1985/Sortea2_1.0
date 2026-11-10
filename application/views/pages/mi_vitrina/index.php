@@ -60,6 +60,113 @@ $reservados_texto = implode(', ', $reservados_visibles);
 if (count($reservados) > count($reservados_visibles)) {
     $reservados_texto .= ', ...';
 }
+
+// ─────────────────────────────────────────────────────────
+// Mi Plan (M02): lectura defensiva de $plan_info.
+// Contrato: tiene_plan, asignacion, plan, usadas, limite,
+// restantes, ilimitado, puede_publicar, motivo, fin.
+// ─────────────────────────────────────────────────────────
+$plan_info = (isset($plan_info) && is_array($plan_info)) ? $plan_info : [];
+
+$plan_tiene = !empty($plan_info['tiene_plan']);
+$plan_data = (isset($plan_info['plan']) && is_array($plan_info['plan'])) ? $plan_info['plan'] : [];
+$plan_asig = (isset($plan_info['asignacion']) && is_array($plan_info['asignacion'])) ? $plan_info['asignacion'] : [];
+
+$plan_nombre = trim((string)($plan_data['plan_nombre'] ?? $plan_data['nombre'] ?? $plan_info['plan_nombre'] ?? ''));
+if ($plan_nombre === '') {
+    $plan_nombre = 'Plan de rifas';
+}
+
+$plan_tipo = strtolower(trim((string)($plan_data['plan_tipo'] ?? $plan_data['tipo'] ?? $plan_info['tipo'] ?? '')));
+$plan_ilimitado = !empty($plan_info['ilimitado']) || $plan_tipo === 'ilimitado';
+
+$plan_limite = null;
+if (isset($plan_info['limite']) && is_numeric($plan_info['limite'])) {
+    $plan_limite = (int)$plan_info['limite'];
+} elseif (isset($plan_data['plan_limite']) && is_numeric($plan_data['plan_limite'])) {
+    $plan_limite = (int)$plan_data['plan_limite'];
+} elseif (isset($plan_data['limite']) && is_numeric($plan_data['limite'])) {
+    $plan_limite = (int)$plan_data['limite'];
+}
+if ($plan_limite !== null && $plan_limite <= 0) {
+    $plan_ilimitado = true;
+}
+
+$plan_usadas = (isset($plan_info['usadas']) && is_numeric($plan_info['usadas']))
+    ? max(0, (int)$plan_info['usadas'])
+    : 0;
+
+$plan_restantes = (isset($plan_info['restantes']) && is_numeric($plan_info['restantes']))
+    ? max(0, (int)$plan_info['restantes'])
+    : null;
+if (!$plan_ilimitado && $plan_restantes === null && $plan_limite !== null) {
+    $plan_restantes = max(0, $plan_limite - $plan_usadas);
+}
+
+$plan_puede_publicar = array_key_exists('puede_publicar', $plan_info)
+    ? (bool)$plan_info['puede_publicar']
+    : true;
+$plan_motivo = trim((string)($plan_info['motivo'] ?? ''));
+
+$plan_fin_raw = $plan_info['fin'] ?? ($plan_asig['asig_fin'] ?? '');
+$plan_fin_texto = 'Sin límite';
+if (is_string($plan_fin_raw) && trim($plan_fin_raw) !== '' && strtoupper(trim($plan_fin_raw)) !== 'NULL') {
+    $plan_fin_ts = strtotime(trim($plan_fin_raw));
+    $plan_fin_texto = $plan_fin_ts ? date('d/m/Y', $plan_fin_ts) : trim($plan_fin_raw);
+}
+
+$plan_estado_texto = 'Activo';
+$plan_estado_clase = 'success';
+if (!$plan_puede_publicar) {
+    $plan_motivo_l = function_exists('mb_strtolower') ? mb_strtolower($plan_motivo, 'UTF-8') : strtolower($plan_motivo);
+
+    if (strpos($plan_motivo_l, 'vencid') !== false) {
+        $plan_estado_texto = 'Vencido';
+        $plan_estado_clase = 'danger';
+    } elseif (strpos($plan_motivo_l, 'cupo') !== false
+        || strpos($plan_motivo_l, 'limite') !== false
+        || strpos($plan_motivo_l, 'límite') !== false) {
+        $plan_estado_texto = 'Sin cupo';
+        $plan_estado_clase = 'warning';
+    } else {
+        $plan_estado_texto = 'No disponible';
+        $plan_estado_clase = 'warning';
+    }
+} elseif (is_string($plan_fin_raw) && trim($plan_fin_raw) !== '' && strtoupper(trim($plan_fin_raw)) !== 'NULL') {
+    $plan_fin_ts = strtotime(trim($plan_fin_raw));
+    if ($plan_fin_ts && $plan_fin_ts < time()) {
+        $plan_estado_texto = 'Vencido';
+        $plan_estado_clase = 'danger';
+    }
+}
+
+$plan_motivo_texto = $plan_motivo;
+$plan_motivos = [
+    'sin_plan' => 'Sin plan activo',
+    'sin_cupo' => 'Sin cupo disponible',
+    'vencida'  => 'Plan vencido',
+    'vencido'  => 'Plan vencido',
+];
+if (isset($plan_motivos[$plan_motivo])) {
+    $plan_motivo_texto = $plan_motivos[$plan_motivo];
+}
+
+$plan_tipo_badge = $plan_ilimitado
+    ? 'Ilimitado'
+    : ($plan_limite !== null ? $plan_limite . ' ' . ($plan_limite === 1 ? 'rifa' : 'rifas') : 'Por rifas');
+
+$plan_uso_texto = $plan_ilimitado
+    ? ('Ilimitado · ' . $plan_usadas . ' usadas')
+    : ($plan_usadas . ' / ' . ($plan_limite !== null ? $plan_limite : 0));
+
+$plan_restantes_texto = $plan_ilimitado
+    ? 'Ilimitado'
+    : (string)($plan_restantes !== null ? $plan_restantes : 0);
+
+$plan_progreso = 0;
+if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0) {
+    $plan_progreso = (int)min(100, max(0, round(($plan_usadas / $plan_limite) * 100)));
+}
 ?>
 
 <div class="d-flex flex-column gap-7 gap-lg-10">
@@ -314,6 +421,108 @@ if (count($reservados) > count($reservados_visibles)) {
         </div>
     </div>
     <!--end::Resumen de mi vitrina-->
+
+    <!--begin::Mi Plan-->
+    <div class="card card-flush shadow-sm">
+        <div class="card-header border-0 pt-6">
+            <div class="card-title">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="symbol symbol-40px symbol-circle bg-light-primary">
+                        <i class="ki-duotone ki-crown fs-2 text-primary">
+                            <span class="path1"></span><span class="path2"></span>
+                        </i>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h3 class="fw-bold text-gray-900 mb-1">Mi Plan</h3>
+                        <span class="text-muted fs-7">Estado de tu plan de rifas y cupo disponible.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body pt-2">
+            <?php if ($plan_tiene): ?>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-5">
+                    <span class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_nombre, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span class="badge badge-light-primary fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_tipo_badge, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span class="badge badge-light-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> fw-bold px-3 py-2"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
+                </div>
+
+                <div class="row g-5">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Uso</div>
+                            <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_uso_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                            <?php if (!$plan_ilimitado && $plan_limite !== null && $plan_limite > 0): ?>
+                                <div class="progress h-6px w-100 bg-light-primary mt-3">
+                                    <div class="progress-bar bg-primary"
+                                        role="progressbar"
+                                        style="width: <?php echo (int)$plan_progreso; ?>%"
+                                        aria-valuenow="<?php echo (int)$plan_progreso; ?>"
+                                        aria-valuemin="0"
+                                        aria-valuemax="100"></div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Restantes</div>
+                            <div class="fw-bold text-gray-900 fs-5"><?php echo htmlspecialchars($plan_restantes_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Vigencia</div>
+                            <div class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_fin_texto, ENT_QUOTES, 'UTF-8'); ?></div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="border border-gray-200 rounded-3 bg-light p-4 h-100">
+                            <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Estado</div>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                <span class="bullet bullet-dot bg-<?php echo htmlspecialchars($plan_estado_clase, ENT_QUOTES, 'UTF-8'); ?> w-10px h-10px"></span>
+                                <span class="fw-bold text-gray-900 fs-6"><?php echo htmlspecialchars($plan_estado_texto, ENT_QUOTES, 'UTF-8'); ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if (!$plan_puede_publicar): ?>
+                    <div class="alert bg-light-warning border border-warning border-dashed d-flex align-items-start gap-3 mt-5 mb-0" role="alert">
+                        <i class="ki-duotone ki-information-2 fs-2 text-warning mt-1">
+                            <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                        </i>
+                        <div class="text-gray-700 fs-7">
+                            No puedes publicar nuevas rifas en este momento.
+                            <?php if ($plan_motivo_texto !== ''): ?>
+                                Motivo: <strong><?php echo htmlspecialchars($plan_motivo_texto, ENT_QUOTES, 'UTF-8'); ?></strong>.
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php else: ?>
+                <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="symbol symbol-45px symbol-circle bg-light-warning flex-shrink-0">
+                            <i class="ki-duotone ki-information-2 fs-2x text-warning">
+                                <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                            </i>
+                        </div>
+                        <div class="d-flex flex-column">
+                            <div class="fw-bold text-gray-900 fs-6">Sin plan activo</div>
+                            <div class="text-muted fs-7">Contacta al administrador para asignarte un plan.</div>
+                        </div>
+                    </div>
+                    <span class="badge badge-light-danger fw-bold px-3 py-2 align-self-start align-self-md-center">Sin plan activo</span>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <!--end::Mi Plan-->
 
     <div class="row g-6 g-xl-9">
         <!--begin::Editar datos-->

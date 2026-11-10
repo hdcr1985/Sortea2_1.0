@@ -39,14 +39,19 @@ class MiVitrina extends MY_Controller
 
         $url_publica = '';
         $host        = '';
+        $plan_info   = NULL;
 
         if (!empty($perfil)) {
             $host        = (string)$perfil['org_slug'] . '.' . $base_domain;
             $url_publica = $this->_scheme() . '://' . $host . '/';
+
+            $this->load->model('Plan_asignacion_model');
+            $plan_info = $this->Plan_asignacion_model->get_estado_por_org((int)$perfil['org_id']);
         }
 
         $datos = [
             'perfil'      => $perfil,
+            'plan_info'   => $plan_info,
             'url_publica' => $url_publica,
             'host'        => $host,
             'base_domain' => $base_domain,

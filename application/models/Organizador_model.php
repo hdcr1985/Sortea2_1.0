@@ -189,6 +189,41 @@ class Organizador_model extends CI_Model
     }
 
     /**
+     * Organizadores activos para selects (Select2).
+     *
+     * @param  string $search
+     * @param  int    $limit
+     * @return array
+     */
+    public function get_activos_para_select($search = '', $limit = 50)
+    {
+        if (!$this->db->table_exists($this->table)) {
+            return [];
+        }
+
+        $limit = max(1, min(100, (int)$limit));
+
+        $this->db
+            ->select('org_id, org_nombre_publico, org_slug')
+            ->where('org_status', 1)
+            ->where('org_eliminado', 0);
+
+        $search = trim((string)$search);
+        if ($search !== '') {
+            $this->db->group_start();
+            $this->db->like('org_nombre_publico', $search);
+            $this->db->or_like('org_slug', $search);
+            $this->db->group_end();
+        }
+
+        return $this->db
+            ->order_by('org_nombre_publico', 'ASC')
+            ->limit($limit)
+            ->get($this->table)
+            ->result_array();
+    }
+
+    /**
      * Obtiene un organizador activo a partir de un dominio verificado.
      *
      * Devuelve todos los campos del organizador más:
