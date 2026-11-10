@@ -174,6 +174,41 @@ class Media extends CI_Controller
         return $this->_servir_imagen_rifa((int)$imagen['rifa_org_id'], (string)$imagen['img_archivo']);
     }
 
+    /**
+     * Sirve el logo de un método de pago (M05).
+     *
+     * @param  int $met_id
+     * @return void
+     */
+    public function metodo_imagen($met_id = 0)
+    {
+        $this->load->library('session');
+        $this->load->database();
+
+        $met_id = (int)$met_id;
+        if ($met_id <= 0 || !$this->db->table_exists('rif_metodos_pago')) {
+            return $this->_no_encontrado();
+        }
+
+        $metodo = $this->db
+            ->select('met_id, met_imagen, met_status, met_scope, met_org_id, met_eliminado')
+            ->where('met_id', $met_id)
+            ->where('met_eliminado', 0)
+            ->limit(1)
+            ->get('rif_metodos_pago')
+            ->row_array();
+
+        if (empty($metodo) || empty($metodo['met_imagen'])) {
+            return $this->_no_encontrado();
+        }
+
+        if (!$this->_autorizado_metodo($metodo)) {
+            return $this->_no_encontrado();
+        }
+
+        return $this->_servir_imagen_metodo((string)$metodo['met_imagen']);
+    }
+
     public function theme($archivo = '')
     {
         $archivo = basename(rawurldecode(trim((string)$archivo)));
@@ -302,6 +337,97 @@ class Media extends CI_Controller
     private function _servir_imagen_rifa($org_id, $archivo)
     {
         $ruta = $this->_ruta_archivo_rifa((int)$org_id, $archivo);
+
+        if (!is_file($ruta)) {
+            return $this->_no_encontrado();
+        }
+
+        $mime = $this->_detectar_mime($ruta);
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], TRUE)) {
+            return $this->_no_encontrado();
+        }
+
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+
+        $this->output
+            ->set_content_type($mime)
+            ->set_header('Content-Length: ' . filesize($ruta))
+            ->set_header('Cache-Control: private, max-age=86400')
+            ->set_header('X-Content-Type-Options: nosniff')
+            ->set_output(file_get_contents($ruta));
+    }
+
+    /**
+     * Autoriza el logo de un método de pago.
+     *
+     * @param  array $metodo
+     * @return bool
+     */
+    private function _autorizado_metodo(array $metodo)
+    {
+        if ((int)($metodo['met_status'] ?? 0) === 1) {
+            return TRUE;
+        }
+
+        $usuario = $this->session->userdata('usuario');
+        if (empty($usuario) || empty($usuario['usu_id'])) {
+            return FALSE;
+        }
+
+        $usuario_db = $this->db
+            ->select('usu_id, usu_tipoper')
+            ->where('usu_id', (string)$usuario['usu_id'])
+            ->where('usu_status', '1')
+            ->limit(1)
+            ->get('cab_usuarios')
+            ->row_array();
+
+        if (empty($usuario_db)) {
+            return FALSE;
+        }
+
+        $tipoper   = (string)($usuario_db['usu_tipoper'] ?? '');
+        $es_master = FALSE;
+
+        if ($tipoper !== '') {
+            $this->load->model('Menu_model');
+            $es_master = $this->Menu_model->rol_es_master($tipoper);
+        }
+
+        if ($es_master) {
+            return TRUE;
+        }
+
+        if ((string)($metodo['met_scope'] ?? '') === 'organizador'
+            && !empty($metodo['met_org_id'])) {
+            $organizador = $this->db
+                ->select('org_id')
+                ->where('org_usuario_id', (string)$usuario['usu_id'])
+                ->where('org_eliminado', 0)
+                ->where('org_status', 1)
+                ->limit(1)
+                ->get('rif_organizadores')
+                ->row_array();
+
+            return !empty($organizador)
+                && (int)$organizador['org_id'] === (int)$metodo['met_org_id'];
+        }
+
+        return FALSE;
+    }
+
+    private function _ruta_archivo_metodo($archivo)
+    {
+        return $this->_storage_base()
+            . DIRECTORY_SEPARATOR . 'metodos'
+            . DIRECTORY_SEPARATOR . basename((string)$archivo);
+    }
+
+    private function _servir_imagen_metodo($archivo)
+    {
+        $ruta = $this->_ruta_archivo_metodo($archivo);
 
         if (!is_file($ruta)) {
             return $this->_no_encontrado();

@@ -198,6 +198,107 @@ class Rifa_ticket_model extends CI_Model
     }
 
     /**
+     * Mapa público de números. No expone comprador ni motivo.
+     *
+     * @param  int $rifa_id
+     * @param  int $offset
+     * @param  int $limit
+     * @param  int $mostrar_reservados
+     * @return array
+     */
+    public function get_mapa_publico($rifa_id, $offset = 0, $limit = 200, $mostrar_reservados = 1)
+    {
+        $offset = max(0, (int)$offset);
+        $limit  = max(1, min(500, (int)$limit));
+
+        if (!$this->tabla_disponible()) {
+            return ['total' => 0, 'total_numeros' => 0, 'disponibles' => 0, 'offset' => 0, 'limit' => $limit, 'items' => []];
+        }
+
+        $rifa = $this->_get_rifa($rifa_id);
+        if (empty($rifa)) {
+            return ['total' => 0, 'total_numeros' => 0, 'disponibles' => 0, 'offset' => 0, 'limit' => $limit, 'items' => []];
+        }
+
+        $resumen = $this->get_resumen($rifa_id);
+
+        if ((int)$mostrar_reservados === 1) {
+            $mapa = $this->get_mapa($rifa_id, $offset, $limit);
+            $items = [];
+            foreach ($mapa['items'] as $item) {
+                $items[] = [
+                    'numero'     => (string)$item['numero'],
+                    'numero_int' => (int)$item['numero_int'],
+                    'estado'     => (string)$item['estado'],
+                ];
+            }
+
+            return [
+                'total'         => (int)$mapa['total'],
+                'total_numeros' => (int)$mapa['total'],
+                'disponibles'   => (int)$resumen['disponibles'],
+                'offset'        => (int)$mapa['offset'],
+                'limit'         => (int)$mapa['limit'],
+                'items'         => $items,
+            ];
+        }
+
+        $desde   = (int)$rifa['rifa_numero_desde'];
+        $hasta   = (int)$rifa['rifa_numero_hasta'];
+        $padding = max(1, (int)$rifa['rifa_padding']);
+
+        $ocupados = $this->db
+            ->select('tick_numero_int')
+            ->where('tick_rifa_id', (int)$rifa_id)
+            ->get($this->table)
+            ->result_array();
+
+        $set = [];
+        foreach ($ocupados as $fila) {
+            $set[(int)$fila['tick_numero_int']] = TRUE;
+        }
+
+        $disponibles = [];
+        for ($n = $desde; $n <= $hasta; $n++) {
+            if (!isset($set[$n])) {
+                $disponibles[] = $n;
+            }
+        }
+
+        $total_disponibles = count($disponibles);
+        if ($offset >= $total_disponibles) {
+            return [
+                'total'         => $total_disponibles,
+                'total_numeros' => (int)$rifa['rifa_total_numeros'],
+                'disponibles'   => $total_disponibles,
+                'offset'        => $offset,
+                'limit'         => $limit,
+                'items'         => [],
+            ];
+        }
+
+        $items = [];
+        $fin = min($total_disponibles, $offset + $limit);
+        for ($i = $offset; $i < $fin; $i++) {
+            $n = $disponibles[$i];
+            $items[] = [
+                'numero'     => str_pad((string)$n, $padding, '0', STR_PAD_LEFT),
+                'numero_int' => $n,
+                'estado'     => 'disponible',
+            ];
+        }
+
+        return [
+            'total'         => $total_disponibles,
+            'total_numeros' => (int)$rifa['rifa_total_numeros'],
+            'disponibles'   => $total_disponibles,
+            'offset'        => $offset,
+            'limit'         => $limit,
+            'items'         => $items,
+        ];
+    }
+
+    /**
      * Rangos bloqueados agrupados por motivo y números consecutivos.
      *
      * @param  int $rifa_id

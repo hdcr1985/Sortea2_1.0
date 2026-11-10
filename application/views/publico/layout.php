@@ -81,6 +81,9 @@ $primary_rgb = $r . ', ' . $g . ', ' . $b;
 
 $content = isset($content) ? $content : '';
 $anio = (isset($anio) && is_numeric($anio)) ? (int)$anio : (int)date('Y');
+$robots = isset($robots) && is_string($robots) && trim($robots) !== ''
+    ? trim($robots)
+    : 'index, follow';
 ?>
 <!DOCTYPE html>
 <html lang="es" data-bs-theme="light">
@@ -89,7 +92,7 @@ $anio = (isset($anio) && is_numeric($anio)) ? (int)$anio : (int)date('Y');
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><?php echo htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8'); ?></title>
     <meta name="description" content="<?php echo htmlspecialchars($tenant_nombre . ' - Sitio oficial', ENT_QUOTES, 'UTF-8'); ?>" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="<?php echo htmlspecialchars($robots, ENT_QUOTES, 'UTF-8'); ?>" />
 
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700" />

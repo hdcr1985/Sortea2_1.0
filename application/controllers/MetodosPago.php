@@ -8,11 +8,23 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  */
 class MetodosPago extends MY_Controller
 {
+    private $iconos = [
+        'ki-bill',
+        'ki-dollar',
+        'ki-bank',
+        'ki-wallet',
+        'ki-credit-cart',
+        'ki-phone',
+        'ki-abstract-26',
+        'ki-gift',
+    ];
+
     public function __construct()
     {
         parent::__construct();
 
         $this->load->model('Metodo_pago_model');
+        $this->load->library('metodo_logo');
 
         $this->page_title = 'Métodos de Pago';
         $this->breadcrumb = [
@@ -122,10 +134,24 @@ class MetodosPago extends MY_Controller
             return $this->json(['ok' => FALSE, 'errores' => $errores], 422);
         }
 
+        $logo = $this->metodo_logo->subir('met_logo');
+        if (!$logo['ok']) {
+            return $this->json([
+                'ok'      => FALSE,
+                'errores' => ['met_logo' => (string)$logo['error']],
+            ], 422);
+        }
+
+        $data['met_imagen'] = $logo['filename'];
+
         $actor_id = isset($this->usuario['usu_id']) ? (int)$this->usuario['usu_id'] : NULL;
         $id = $this->Metodo_pago_model->crear_global($data, $campos, $actor_id);
 
         if (!$id) {
+            if (!empty($logo['filename'])) {
+                $this->metodo_logo->borrar($logo['filename']);
+            }
+
             return $this->json(['ok' => FALSE, 'msg' => 'No se pudo crear el método de pago.'], 500);
         }
 
@@ -175,8 +201,35 @@ class MetodosPago extends MY_Controller
             ], 422);
         }
 
+        $logo = $this->metodo_logo->subir('met_logo');
+        if (!$logo['ok']) {
+            return $this->json([
+                'ok'      => FALSE,
+                'errores' => ['met_logo' => (string)$logo['error']],
+            ], 422);
+        }
+
+        $imagen_anterior = (string)($actual['met_imagen'] ?? '');
+        $imagen_nueva    = $imagen_anterior;
+
+        if (!empty($logo['filename'])) {
+            $imagen_nueva = (string)$logo['filename'];
+        } elseif ($this->input->post('met_quitar_imagen') === '1') {
+            $imagen_nueva = '';
+        }
+
+        $data['met_imagen'] = $imagen_nueva !== '' ? $imagen_nueva : NULL;
+
         if (!$this->Metodo_pago_model->actualizar_global($id, $data, $campos)) {
+            if (!empty($logo['filename'])) {
+                $this->metodo_logo->borrar($logo['filename']);
+            }
+
             return $this->json(['ok' => FALSE, 'msg' => 'No se pudo actualizar el método de pago.'], 500);
+        }
+
+        if ($imagen_anterior !== '' && $imagen_anterior !== $imagen_nueva) {
+            $this->metodo_logo->borrar($imagen_anterior);
         }
 
         $this->bitacora(
@@ -269,6 +322,7 @@ class MetodosPago extends MY_Controller
             'met_nombre'        => trim($this->_post_escalar('met_nombre')),
             'met_descripcion'   => trim($this->_post_escalar('met_descripcion')),
             'met_instrucciones' => trim($this->_post_html('met_instrucciones')),
+            'met_icono'         => trim($this->_post_escalar('met_icono', 'ki-bill')),
             'met_status'        => in_array($this->_post_escalar('met_status', '1'), ['1', 'on', 'true'], TRUE) ? 1 : 0,
             'met_orden'         => (int)$this->_post_escalar('met_orden', '1'),
         ];
@@ -319,6 +373,10 @@ class MetodosPago extends MY_Controller
 
         if ($this->_longitud((string)($data['met_instrucciones'] ?? '')) > 5000) {
             $errores['met_instrucciones'] = 'Las instrucciones no pueden exceder 5000 caracteres.';
+        }
+
+        if (!in_array((string)($data['met_icono'] ?? ''), $this->iconos, TRUE)) {
+            $errores['met_icono'] = 'Selecciona un icono válido.';
         }
 
         if (!in_array((int)($data['met_status'] ?? -1), [0, 1], TRUE)) {
@@ -391,10 +449,12 @@ class MetodosPago extends MY_Controller
             $orgs    = (int)($item['orgs_count'] ?? 0);
             $rifas   = $this->Metodo_pago_model->tiene_rifas_activas($id);
 
-            $nombreHtml = '<div class="d-flex flex-column">'
+            $nombreHtml = '<div class="d-flex align-items-center">'
+                . $this->_media_html($item)
+                . '<div class="d-flex flex-column">'
                 . '<span class="fw-bold text-gray-900 fs-6">' . $nombre . '</span>'
                 . '<span class="text-muted fs-8">' . ($desc !== '' ? $desc : 'Sin descripción') . '</span>'
-                . '</div>';
+                . '</div></div>';
 
             $camposHtml = '<span class="badge badge-light-primary fw-bold px-3 py-2">' . $campos . ' campo(s)</span>';
             $orgsHtml   = '<span class="badge badge-light-info fw-bold px-3 py-2">' . $orgs . ' organización(es)</span>';
@@ -429,6 +489,28 @@ class MetodosPago extends MY_Controller
         }
 
         return $data;
+    }
+
+    private function _media_html(array $item)
+    {
+        $imagen = trim((string)($item['met_imagen'] ?? ''));
+        if ($imagen !== '') {
+            $url = base_url('media/metodo/' . (int)$item['met_id']);
+            return '<img src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"'
+                . ' alt="" class="me-3 rounded-3" loading="lazy" referrerpolicy="no-referrer"'
+                . ' style="width:40px;height:40px;object-fit:cover;flex-shrink:0;" />';
+        }
+
+        $icono = (string)($item['met_icono'] ?? 'ki-bill');
+        if (!in_array($icono, $this->iconos, TRUE)) {
+            $icono = 'ki-bill';
+        }
+
+        return '<div class="symbol symbol-40px symbol-circle bg-light-primary me-3 flex-shrink-0">'
+            . '<span class="symbol-label">'
+            . '<i class="ki-duotone ' . $icono . ' fs-4 text-primary">'
+            . '<span class="path1"></span><span class="path2"></span><span class="path3"></span>'
+            . '</i></span></div>';
     }
 
     private function _post_escalar($key, $default = '')

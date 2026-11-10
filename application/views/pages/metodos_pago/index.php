@@ -98,7 +98,7 @@
                     <ul class="mb-0 fs-7" id="lista_errores_metodo"></ul>
                 </div>
 
-                <form id="form_metodo" novalidate="novalidate">
+                <form id="form_metodo" enctype="multipart/form-data" novalidate="novalidate">
                     <input type="hidden" name="met_id" id="met_id" value="0" />
 
                     <div class="row g-5">
@@ -127,6 +127,46 @@
                             <textarea name="met_instrucciones" id="met_instrucciones" class="form-control form-control-solid"
                                 rows="3" maxlength="5000" placeholder="Instrucciones generales para el comprador"></textarea>
                             <div class="invalid-feedback" data-error-for="met_instrucciones"></div>
+                        </div>
+
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold fs-7 text-gray-800" for="met_icono">Icono</label>
+                            <select name="met_icono" id="met_icono" class="form-select form-select-solid">
+                                <option value="ki-bill">Factura / pago</option>
+                                <option value="ki-dollar">Dólar</option>
+                                <option value="ki-bank">Banco</option>
+                                <option value="ki-wallet">Billetera</option>
+                                <option value="ki-credit-cart">Tarjeta</option>
+                                <option value="ki-phone">Teléfono</option>
+                                <option value="ki-abstract-26">Genérico</option>
+                                <option value="ki-gift">Regalo</option>
+                            </select>
+                            <div class="invalid-feedback" data-error-for="met_icono"></div>
+                            <div class="text-muted fs-8 mt-1">Se usa si no colocas una imagen.</div>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold fs-7 text-gray-800" for="met_logo">Logo (opcional)</label>
+                            <input type="file" name="met_logo" id="met_logo" class="form-control form-control-solid"
+                                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+                            <div class="invalid-feedback" data-error-for="met_logo"></div>
+                            <div class="text-muted fs-8 mt-1">JPG, PNG o WEBP. Máximo 4 MB. Se usa en lugar del icono.</div>
+                            <div class="form-check form-check-custom form-check-solid mt-2">
+                                <input class="form-check-input" type="checkbox" name="met_quitar_imagen" id="met_quitar_imagen" value="1" />
+                                <label class="form-check-label fs-8 ms-2" for="met_quitar_imagen">Quitar logo actual</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border border-gray-200 rounded-3 p-3 bg-light d-flex align-items-center gap-3">
+                                <div class="symbol symbol-50px symbol-circle bg-light-primary flex-shrink-0">
+                                    <span class="symbol-label" id="met_media_preview_icon">
+                                        <i class="ki-duotone ki-bill fs-2 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                    </span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <span class="fw-semibold text-gray-900 fs-7">Vista previa</span>
+                                    <span class="text-muted fs-8" id="met_media_preview_text">Icono por defecto</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-12">
@@ -186,6 +226,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const BASE_URL = <?php echo json_encode(base_url($url_base . '/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const LOGIN_EXPIRED = <?php echo json_encode(base_url('login?expired=1'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const MEDIA_METODO_BASE = <?php echo json_encode(base_url('media/metodo/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     const jq = window.jQuery || null;
     const tieneDataTables = !!(jq && jq.fn && jq.fn.DataTable);
@@ -202,6 +243,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let filtroTimer = null;
     let accionEnCurso = false;
     let campoSeq = 0;
+    let metImagenActual = '';
+    let metLogoObjectUrl = null;
 
     function escapeHtml(valor) {
         return String(valor === null || valor === undefined ? '' : valor)
@@ -398,13 +441,51 @@ document.addEventListener('DOMContentLoaded', function () {
         camposWrap.appendChild(crear_fila_campo({ campo_requerido: 1, campo_orden: 1 }));
     }
 
+    function actualizar_media_preview() {
+        const icono = document.getElementById('met_icono').value || 'ki-bill';
+        const fileInput = document.getElementById('met_logo');
+        const quitar = document.getElementById('met_quitar_imagen');
+        const cont = document.getElementById('met_media_preview_icon');
+        const texto = document.getElementById('met_media_preview_text');
+        const metId = parseInt(document.getElementById('met_id').value, 10) || 0;
+
+        if (!cont) return;
+
+        if (metLogoObjectUrl) {
+            URL.revokeObjectURL(metLogoObjectUrl);
+            metLogoObjectUrl = null;
+        }
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            metLogoObjectUrl = URL.createObjectURL(fileInput.files[0]);
+            cont.innerHTML = '<img src="' + escapeHtml(metLogoObjectUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />';
+            if (texto) texto.textContent = 'Nuevo logo seleccionado';
+            return;
+        }
+
+        if (!quitar || !quitar.checked) {
+            if (metId > 0 && metImagenActual !== '') {
+                cont.innerHTML = '<img src="' + escapeHtml(MEDIA_METODO_BASE + metId) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />';
+                if (texto) texto.textContent = 'Logo actual';
+                return;
+            }
+        }
+
+        cont.innerHTML = '<i class="ki-duotone ' + escapeHtml(icono) + ' fs-2 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>';
+        if (texto) texto.textContent = 'Icono seleccionado';
+    }
+
     function limpiar_modal() {
         form.reset();
         document.getElementById('met_id').value = '0';
         document.getElementById('modal_metodo_titulo').textContent = 'Nuevo método de pago';
         document.getElementById('met_orden').value = '1';
+        document.getElementById('met_icono').value = 'ki-bill';
+        document.getElementById('met_quitar_imagen').checked = false;
         document.getElementById('met_status').checked = true;
+        metImagenActual = '';
         render_campos([]);
+        actualizar_media_preview();
         limpiar_errores();
     }
 
@@ -425,7 +506,11 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('met_descripcion').value = String(d.met_descripcion || '');
             document.getElementById('met_instrucciones').value = String(d.met_instrucciones || '');
             document.getElementById('met_orden').value = String(parseInt(d.met_orden, 10) || 1);
+            document.getElementById('met_icono').value = String(d.met_icono || 'ki-bill');
+            document.getElementById('met_quitar_imagen').checked = false;
+            metImagenActual = String(d.met_imagen || '');
             document.getElementById('met_status').checked = parseInt(d.met_status, 10) === 1;
+            actualizar_media_preview();
             render_campos(d.campos || []);
             modal.show();
         }).catch(function () {
@@ -631,6 +716,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('btn_agregar_campo').addEventListener('click', agregar_campo);
+    document.getElementById('met_icono').addEventListener('change', actualizar_media_preview);
+    document.getElementById('met_logo').addEventListener('change', actualizar_media_preview);
+    document.getElementById('met_quitar_imagen').addEventListener('change', actualizar_media_preview);
     btnGuardar.addEventListener('click', guardar_metodo);
     form.addEventListener('submit', function (event) {
         event.preventDefault();

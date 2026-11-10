@@ -47,6 +47,7 @@ $route['media/usuario/(:any)']       = 'Media/usuario/$1';
 $route['media/theme/(:any)']         = 'Media/theme/$1';
 $route['media/rifa/(:num)']          = 'Media/rifa/$1';
 $route['media/rifa-imagen/(:num)']   = 'Media/rifa_imagen/$1';
+$route['media/metodo/(:num)']        = 'Media/metodo_imagen/$1';
 $route['notificaciones/feed']        = 'Notificaciones/feed';
 $route['notificaciones/marcar-leida/(:num)'] = 'Notificaciones/marcar_leida/$1';
 $route['notificaciones/marcar-todas'] = 'Notificaciones/marcar_todas';
@@ -127,6 +128,23 @@ $route['mis-metodos-pago/crear']               = 'MisMetodosPago/crear';
 $route['mis-metodos-pago/actualizar/(:num)']   = 'MisMetodosPago/actualizar/$1';
 $route['mis-metodos-pago/estado/(:num)']       = 'MisMetodosPago/estado/$1';
 $route['mis-metodos-pago/eliminar/(:num)']     = 'MisMetodosPago/eliminar/$1';
+
+// ── M07 Órdenes del organizador ────────────────────────────
+$route['mis-ordenes']                          = 'MisOrdenes/index';
+$route['mis-ordenes/datos/(:num)']             = 'MisOrdenes/datos/$1';
+$route['mis-ordenes/aprobar/(:num)']           = 'MisOrdenes/aprobar/$1';
+$route['mis-ordenes/rechazar/(:num)']          = 'MisOrdenes/rechazar/$1';
+
+// ── M07 Checkout público (local y host tenant) ─────────────
+$route['sitio/(:any)/rifa/(:any)/disponibilidad'] = 'Publico/disponibilidad_local/$1/$2';
+$route['sitio/(:any)/rifa/(:any)/comprar']        = 'Publico/comprar_local/$1/$2';
+$route['sitio/(:any)/rifa/(:any)']                = 'Publico/rifa_local/$1/$2';
+$route['sitio/(:any)/orden/(:any)']               = 'Publico/orden_local/$1/$2';
+
+$route['rifa/(:any)/disponibilidad'] = 'Publico/disponibilidad_host/$1';
+$route['rifa/(:any)/comprar']        = 'Publico/comprar_host/$1';
+$route['rifa/(:any)']                = 'Publico/rifa_host/$1';
+$route['orden/(:any)']               = 'Publico/orden_host/$1';
 
 $route['sitio/(:any)']           = 'Publico/index/$1';
 

@@ -51,7 +51,7 @@ class Org_metodo_model extends CI_Model
         }
 
         $rows = $this->db
-            ->select('om.*, m.met_id, m.met_scope, m.met_nombre, m.met_descripcion, m.met_instrucciones, m.met_status, m.met_orden AS metodo_orden, m.met_eliminado', FALSE)
+            ->select('om.*, m.met_id, m.met_scope, m.met_nombre, m.met_descripcion, m.met_instrucciones, m.met_icono, m.met_imagen, m.met_status, m.met_orden AS metodo_orden, m.met_eliminado', FALSE)
             ->from($this->table_org . ' om')
             ->join($this->table_metodos . ' m', 'm.met_id = om.orgmet_met_id', 'inner')
             ->where('om.orgmet_org_id', (int)$org_id)
@@ -222,7 +222,7 @@ class Org_metodo_model extends CI_Model
 
         return $this->db
             ->select('rm.rm_orgmet_id, rm.rm_orden, om.orgmet_activo, om.orgmet_org_id,'
-                . ' m.met_id, m.met_nombre, m.met_descripcion, m.met_scope, m.met_status, m.met_eliminado', FALSE)
+                . ' m.met_id, m.met_nombre, m.met_descripcion, m.met_icono, m.met_imagen, m.met_scope, m.met_status, m.met_eliminado', FALSE)
             ->from($this->table_rm . ' rm')
             ->join($this->table_org . ' om', 'om.orgmet_id = rm.rm_orgmet_id', 'inner')
             ->join($this->table_metodos . ' m', 'm.met_id = om.orgmet_met_id', 'inner')
@@ -352,6 +352,8 @@ class Org_metodo_model extends CI_Model
                 'met_nombre'        => trim((string)($data['met_nombre'] ?? '')),
                 'met_descripcion'   => trim((string)($data['met_descripcion'] ?? '')) ?: NULL,
                 'met_instrucciones' => trim((string)($data['met_instrucciones'] ?? '')) ?: NULL,
+                'met_icono'         => trim((string)($data['met_icono'] ?? '')) ?: 'ki-bill',
+                'met_imagen'        => trim((string)($data['met_imagen'] ?? '')) ?: NULL,
                 'met_status'        => 1,
                 'met_orden'         => (int)($data['met_orden'] ?? 1),
                 'met_created_by'    => isset($data['met_created_by']) ? (int)$data['met_created_by'] : NULL,
@@ -431,6 +433,8 @@ class Org_metodo_model extends CI_Model
                 'met_nombre'        => trim((string)($data['met_nombre'] ?? '')),
                 'met_descripcion'   => trim((string)($data['met_descripcion'] ?? '')) ?: NULL,
                 'met_instrucciones' => trim((string)($data['met_instrucciones'] ?? '')) ?: NULL,
+                'met_icono'         => trim((string)($data['met_icono'] ?? '')) ?: 'ki-bill',
+                'met_imagen'        => trim((string)($data['met_imagen'] ?? '')) ?: NULL,
                 'met_orden'         => (int)($data['met_orden'] ?? 1),
                 'met_updated_at'    => $ahora,
             ]);

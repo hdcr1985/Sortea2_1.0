@@ -5,6 +5,25 @@
  * Los métodos globales se configuran con valores propios. Los métodos
  * propios permiten nombre, instrucciones y campos personalizados.
  */
+$media_metodo = function ($item, $size = 40) {
+    $imagen = trim((string)($item['met_imagen'] ?? ''));
+    if ($imagen !== '') {
+        $url = base_url('media/metodo/' . (int)$item['met_id']);
+        return '<img src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" alt=""'
+            . ' class="me-3 rounded-3 flex-shrink-0" loading="lazy" referrerpolicy="no-referrer"'
+            . ' style="width:' . (int)$size . 'px;height:' . (int)$size . 'px;object-fit:cover;" />';
+    }
+
+    $icono = (string)($item['met_icono'] ?? 'ki-bill');
+    if (!preg_match('/^ki-[a-z0-9-]+$/', $icono)) {
+        $icono = 'ki-bill';
+    }
+
+    return '<div class="symbol symbol-' . (int)$size . 'px symbol-circle bg-light-primary me-3 flex-shrink-0">'
+        . '<span class="symbol-label"><i class="ki-duotone ' . $icono . ' fs-4 text-primary">'
+        . '<span class="path1"></span><span class="path2"></span><span class="path3"></span>'
+        . '</i></span></div>';
+};
 ?>
 <!--begin::Toolbar-->
 <div class="d-flex flex-wrap flex-stack mb-6 gap-3">
@@ -56,11 +75,7 @@
                     <div class="col-md-6 col-xl-4">
                         <div class="border border-gray-200 rounded-3 p-4 h-100 d-flex flex-column">
                             <div class="d-flex align-items-center gap-2 mb-2">
-                                <div class="symbol symbol-35px symbol-circle bg-light-primary">
-                                    <i class="ki-duotone ki-bill fs-4 text-primary">
-                                        <span class="path1"></span><span class="path2"></span><span class="path3"></span>
-                                    </i>
-                                </div>
+                                <?php echo $media_metodo($disponible, 35); ?>
                                 <div class="d-flex flex-column">
                                     <span class="fw-bold text-gray-900 fs-7">
                                         <?php echo htmlspecialchars((string)$disponible['met_nombre'], ENT_QUOTES, 'UTF-8'); ?>
@@ -131,13 +146,16 @@
                             ?>
                             <tr>
                                 <td>
-                                    <div class="d-flex flex-column">
-                                        <span class="fw-bold text-gray-900 fs-6">
-                                            <?php echo htmlspecialchars((string)$metodo['met_nombre'], ENT_QUOTES, 'UTF-8'); ?>
-                                        </span>
-                                        <span class="text-muted fs-8">
-                                            <?php echo htmlspecialchars((string)($metodo['met_descripcion'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
-                                        </span>
+                                    <div class="d-flex align-items-center">
+                                        <?php echo $media_metodo($metodo, 35); ?>
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-bold text-gray-900 fs-6">
+                                                <?php echo htmlspecialchars((string)$metodo['met_nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
+                                            <span class="text-muted fs-8">
+                                                <?php echo htmlspecialchars((string)($metodo['met_descripcion'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
+                                        </div>
                                     </div>
                                 </td>
                                 <td>
@@ -260,7 +278,7 @@
                     <ul class="mb-0 fs-7" id="lista_errores_custom"></ul>
                 </div>
 
-                <form id="form_custom" novalidate="novalidate">
+                <form id="form_custom" enctype="multipart/form-data" novalidate="novalidate">
                     <input type="hidden" name="orgmet_id" id="custom_orgmet_id" value="0" />
 
                     <div class="row g-5">
@@ -287,6 +305,45 @@
                             <textarea name="met_instrucciones" id="custom_instrucciones" class="form-control form-control-solid"
                                 rows="3" maxlength="5000" placeholder="Instrucciones para el comprador"></textarea>
                             <div class="invalid-feedback" data-error-for="met_instrucciones"></div>
+                        </div>
+
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold fs-7 text-gray-800" for="custom_icono">Icono</label>
+                            <select name="met_icono" id="custom_icono" class="form-select form-select-solid">
+                                <option value="ki-bill">Factura / pago</option>
+                                <option value="ki-dollar">Dólar</option>
+                                <option value="ki-bank">Banco</option>
+                                <option value="ki-wallet">Billetera</option>
+                                <option value="ki-credit-cart">Tarjeta</option>
+                                <option value="ki-phone">Teléfono</option>
+                                <option value="ki-abstract-26">Genérico</option>
+                                <option value="ki-gift">Regalo</option>
+                            </select>
+                            <div class="invalid-feedback" data-error-for="met_icono"></div>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold fs-7 text-gray-800" for="custom_logo">Logo (opcional)</label>
+                            <input type="file" name="met_logo" id="custom_logo" class="form-control form-control-solid"
+                                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+                            <div class="invalid-feedback" data-error-for="met_logo"></div>
+                            <div class="text-muted fs-8 mt-1">JPG, PNG o WEBP. Máximo 4 MB. Se usa en lugar del icono.</div>
+                            <div class="form-check form-check-custom form-check-solid mt-2">
+                                <input class="form-check-input" type="checkbox" name="met_quitar_imagen" id="custom_quitar_imagen" value="1" />
+                                <label class="form-check-label fs-8 ms-2" for="custom_quitar_imagen">Quitar logo actual</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border border-gray-200 rounded-3 p-3 bg-light d-flex align-items-center gap-3">
+                                <div class="symbol symbol-50px symbol-circle bg-light-primary flex-shrink-0">
+                                    <span class="symbol-label" id="custom_media_preview_icon">
+                                        <i class="ki-duotone ki-bill fs-2 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                                    </span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <span class="fw-semibold text-gray-900 fs-7">Vista previa</span>
+                                    <span class="text-muted fs-8" id="custom_media_preview_text">Icono por defecto</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-12">
@@ -333,6 +390,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const BASE_URL = <?php echo json_encode(base_url($url_base . '/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const LOGIN_EXPIRED = <?php echo json_encode(base_url('login?expired=1'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    const MEDIA_METODO_BASE = <?php echo json_encode(base_url('media/metodo/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     const modalValores = new bootstrap.Modal(document.getElementById('modal_valores'));
     const modalCustom = new bootstrap.Modal(document.getElementById('modal_custom'));
@@ -349,6 +407,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let accionEnCurso = false;
     let campoSeq = 0;
+    let customMetId = 0;
+    let metImagenActual = '';
+    let metLogoObjectUrl = null;
 
     function escapeHtml(valor) {
         return String(valor === null || valor === undefined ? '' : valor)
@@ -612,12 +673,50 @@ document.addEventListener('DOMContentLoaded', function () {
         campos.forEach(function (campo) { camposCustom.appendChild(crear_fila_campo(campo)); });
     }
 
+    function actualizar_media_custom() {
+        const icono = document.getElementById('custom_icono').value || 'ki-bill';
+        const fileInput = document.getElementById('custom_logo');
+        const quitar = document.getElementById('custom_quitar_imagen');
+        const cont = document.getElementById('custom_media_preview_icon');
+        const texto = document.getElementById('custom_media_preview_text');
+
+        if (!cont) return;
+
+        if (metLogoObjectUrl) {
+            URL.revokeObjectURL(metLogoObjectUrl);
+            metLogoObjectUrl = null;
+        }
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            metLogoObjectUrl = URL.createObjectURL(fileInput.files[0]);
+            cont.innerHTML = '<img src="' + escapeHtml(metLogoObjectUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />';
+            if (texto) texto.textContent = 'Nuevo logo seleccionado';
+            return;
+        }
+
+        if (!quitar || !quitar.checked) {
+            if (customMetId > 0 && metImagenActual !== '') {
+                cont.innerHTML = '<img src="' + escapeHtml(MEDIA_METODO_BASE + customMetId) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />';
+                if (texto) texto.textContent = 'Logo actual';
+                return;
+            }
+        }
+
+        cont.innerHTML = '<i class="ki-duotone ' + escapeHtml(icono) + ' fs-2 text-primary"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>';
+        if (texto) texto.textContent = 'Icono seleccionado';
+    }
+
     function limpiar_custom() {
         formCustom.reset();
         document.getElementById('custom_orgmet_id').value = '0';
         document.getElementById('modal_custom_titulo').textContent = 'Nuevo método propio';
         document.getElementById('custom_orden').value = '1';
+        document.getElementById('custom_icono').value = 'ki-bill';
+        document.getElementById('custom_quitar_imagen').checked = false;
+        customMetId = 0;
+        metImagenActual = '';
         render_campos([]);
+        actualizar_media_custom();
         limpiar_errores(formCustom, alertErroresCustom, listaErroresCustom);
     }
 
@@ -642,7 +741,12 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('custom_descripcion').value = String(d.met_descripcion || '');
             document.getElementById('custom_instrucciones').value = String(d.met_instrucciones || '');
             document.getElementById('custom_orden').value = String(parseInt(d.met_orden, 10) || 1);
+            document.getElementById('custom_icono').value = String(d.met_icono || 'ki-bill');
+            document.getElementById('custom_quitar_imagen').checked = false;
+            customMetId = parseInt(d.met_id, 10) || 0;
+            metImagenActual = String(d.met_imagen || '');
             render_campos(d.campos || []);
+            actualizar_media_custom();
             modalCustom.show();
         }).catch(function () {
             mostrar_alerta('error', 'Error de conexión al cargar el método.');
@@ -820,6 +924,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btn_agregar_campo_custom').addEventListener('click', function () {
         camposCustom.appendChild(crear_fila_campo({ campo_requerido: 1, campo_orden: 1 }));
     });
+
+    const customIcono = document.getElementById('custom_icono');
+    const customLogo = document.getElementById('custom_logo');
+    const customQuitar = document.getElementById('custom_quitar_imagen');
+    if (customIcono) customIcono.addEventListener('change', actualizar_media_custom);
+    if (customLogo) customLogo.addEventListener('change', actualizar_media_custom);
+    if (customQuitar) customQuitar.addEventListener('change', actualizar_media_custom);
 
     btnGuardarValores.addEventListener('click', guardar_valores);
     formValores.addEventListener('submit', function (event) {

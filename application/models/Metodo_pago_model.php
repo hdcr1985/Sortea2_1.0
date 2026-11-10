@@ -24,6 +24,8 @@ class Metodo_pago_model extends CI_Model
         'met_nombre',
         'met_descripcion',
         'met_instrucciones',
+        'met_icono',
+        'met_imagen',
         'met_status',
         'met_orden',
         'met_created_by',

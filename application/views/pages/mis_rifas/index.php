@@ -903,6 +903,14 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                                             <?php
                                             $orgmet_id = (int)$metodo_item['orgmet_id'];
                                             $es_custom = (string)$metodo_item['met_scope'] === 'organizador';
+                                            $met_imagen = trim((string)($metodo_item['met_imagen'] ?? ''));
+                                            $met_imagen_url = $met_imagen !== ''
+                                                ? base_url('media/metodo/' . (int)$metodo_item['met_id'])
+                                                : '';
+                                            $met_icono = (string)($metodo_item['met_icono'] ?? 'ki-bill');
+                                            if (!preg_match('/^ki-[a-z0-9-]+$/', $met_icono)) {
+                                                $met_icono = 'ki-bill';
+                                            }
                                             ?>
                                             <div class="col-md-6">
                                                 <label class="border border-gray-200 rounded-3 p-3 bg-light d-flex align-items-start gap-3 h-100"
@@ -912,6 +920,19 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                                                             name="rifa_metodos[]"
                                                             id="rifa_metodo_<?php echo $orgmet_id; ?>"
                                                             value="<?php echo $orgmet_id; ?>" />
+                                                    </div>
+                                                    <div class="symbol symbol-35px symbol-circle bg-light-primary flex-shrink-0">
+                                                        <span class="symbol-label">
+                                                            <?php if ($met_imagen_url !== ''): ?>
+                                                                <img src="<?php echo htmlspecialchars($met_imagen_url, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                                                                    loading="lazy" referrerpolicy="no-referrer"
+                                                                    style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
+                                                            <?php else: ?>
+                                                                <i class="ki-duotone <?php echo htmlspecialchars($met_icono, ENT_QUOTES, 'UTF-8'); ?> fs-4 text-primary">
+                                                                    <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                                                </i>
+                                                            <?php endif; ?>
+                                                        </span>
                                                     </div>
                                                     <div class="d-flex flex-column">
                                                         <span class="fw-bold text-gray-900 fs-7">

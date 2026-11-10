@@ -234,6 +234,15 @@
                         </div>
 
                         <div class="menu-item px-3">
+                            <a href="<?php echo base_url('mis-ordenes'); ?>" class="menu-link px-3 d-flex align-items-center">
+                                <i class="ki-duotone ki-bill fs-3 text-gray-600 me-2">
+                                    <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                </i>
+                                <span class="menu-title fs-7">Órdenes</span>
+                            </a>
+                        </div>
+
+                        <div class="menu-item px-3">
                             <a href="<?php echo base_url('mis-metodos-pago'); ?>" class="menu-link px-3 d-flex align-items-center">
                                 <i class="ki-duotone ki-bill fs-3 text-gray-600 me-2">
                                     <span class="path1"></span><span class="path2"></span><span class="path3"></span>

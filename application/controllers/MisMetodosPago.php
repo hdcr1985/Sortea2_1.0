@@ -11,12 +11,24 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  */
 class MisMetodosPago extends MY_Controller
 {
+    private $iconos = [
+        'ki-bill',
+        'ki-dollar',
+        'ki-bank',
+        'ki-wallet',
+        'ki-credit-cart',
+        'ki-phone',
+        'ki-abstract-26',
+        'ki-gift',
+    ];
+
     public function __construct()
     {
         parent::__construct();
 
         $this->load->model('Org_metodo_model');
         $this->load->model('Organizador_model');
+        $this->load->library('metodo_logo');
 
         $this->page_title = 'Mis Métodos de Pago';
         $this->breadcrumb = [
@@ -152,10 +164,23 @@ class MisMetodosPago extends MY_Controller
             return $this->json(['ok' => FALSE, 'errores' => $errores], 422);
         }
 
+        $logo = $this->metodo_logo->subir('met_logo');
+        if (!$logo['ok']) {
+            return $this->json([
+                'ok'      => FALSE,
+                'errores' => ['met_logo' => (string)$logo['error']],
+            ], 422);
+        }
+
+        $data['met_imagen'] = $logo['filename'];
         $data['met_created_by'] = isset($this->usuario['usu_id']) ? (int)$this->usuario['usu_id'] : NULL;
         $orgmet_id = $this->Org_metodo_model->crear_custom((int)$perfil['org_id'], $data, $campos);
 
         if (!$orgmet_id) {
+            if (!empty($logo['filename'])) {
+                $this->metodo_logo->borrar($logo['filename']);
+            }
+
             return $this->json(['ok' => FALSE, 'msg' => 'No se pudo crear el método propio.'], 500);
         }
 
@@ -206,8 +231,35 @@ class MisMetodosPago extends MY_Controller
             ], 422);
         }
 
+        $logo = $this->metodo_logo->subir('met_logo');
+        if (!$logo['ok']) {
+            return $this->json([
+                'ok'      => FALSE,
+                'errores' => ['met_logo' => (string)$logo['error']],
+            ], 422);
+        }
+
+        $imagen_anterior = (string)($actual['met_imagen'] ?? '');
+        $imagen_nueva    = $imagen_anterior;
+
+        if (!empty($logo['filename'])) {
+            $imagen_nueva = (string)$logo['filename'];
+        } elseif ($this->input->post('met_quitar_imagen') === '1') {
+            $imagen_nueva = '';
+        }
+
+        $data['met_imagen'] = $imagen_nueva !== '' ? $imagen_nueva : NULL;
+
         if (!$this->Org_metodo_model->actualizar_custom($id, (int)$perfil['org_id'], $data, $campos)) {
+            if (!empty($logo['filename'])) {
+                $this->metodo_logo->borrar($logo['filename']);
+            }
+
             return $this->json(['ok' => FALSE, 'msg' => 'No se pudo actualizar el método propio.'], 500);
+        }
+
+        if ($imagen_anterior !== '' && $imagen_anterior !== $imagen_nueva) {
+            $this->metodo_logo->borrar($imagen_anterior);
         }
 
         $this->bitacora(
@@ -332,6 +384,7 @@ class MisMetodosPago extends MY_Controller
             'met_nombre'        => trim($this->_post_escalar('met_nombre')),
             'met_descripcion'   => trim($this->_post_escalar('met_descripcion')),
             'met_instrucciones' => trim($this->_post_html('met_instrucciones')),
+            'met_icono'         => trim($this->_post_escalar('met_icono', 'ki-bill')),
             'met_orden'         => (int)$this->_post_escalar('met_orden', '1'),
         ];
     }
@@ -380,6 +433,10 @@ class MisMetodosPago extends MY_Controller
 
         if ($this->_longitud((string)($data['met_instrucciones'] ?? '')) > 5000) {
             $errores['met_instrucciones'] = 'Las instrucciones no pueden exceder 5000 caracteres.';
+        }
+
+        if (!in_array((string)($data['met_icono'] ?? ''), $this->iconos, TRUE)) {
+            $errores['met_icono'] = 'Selecciona un icono válido.';
         }
 
         if ((int)($data['met_orden'] ?? -1) < 0 || (int)($data['met_orden'] ?? -1) > 9999) {
