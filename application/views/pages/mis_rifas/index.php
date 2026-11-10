@@ -865,6 +865,74 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                         </div>
                         <!--end::Plan y numeración-->
 
+                        <!--begin::Métodos de pago (M05)-->
+                        <div class="col-12" id="wrap_rifa_metodos">
+                            <input type="hidden" name="rifa_metodos_present" value="1" />
+                            <div class="border border-gray-200 rounded-3 p-4">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="ki-duotone ki-bill fs-3 text-primary">
+                                            <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                        </i>
+                                        <div class="d-flex flex-column">
+                                            <span class="fw-bold text-gray-900 fs-6">Métodos de pago</span>
+                                            <span class="text-muted fs-8">Selecciona los métodos que verá el comprador en esta rifa.</span>
+                                        </div>
+                                    </div>
+                                    <a href="<?php echo base_url('mis-metodos-pago'); ?>" target="_blank" rel="noopener"
+                                        class="btn btn-sm btn-light-primary fw-semibold">
+                                        <i class="ki-duotone ki-setting-2 fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                                        Administrar métodos
+                                    </a>
+                                </div>
+
+                                <?php if (empty($metodos_pago)): ?>
+                                    <div class="alert bg-light-warning border border-warning border-dashed d-flex align-items-start gap-3 mb-0" role="alert">
+                                        <i class="ki-duotone ki-information-2 fs-2 text-warning mt-1">
+                                            <span class="path1"></span><span class="path2"></span><span class="path3"></span>
+                                        </i>
+                                        <div class="text-gray-700 fs-7">
+                                            No tienes métodos de pago activos y completos.
+                                            <a href="<?php echo base_url('mis-metodos-pago'); ?>" class="fw-bold text-primary">Configura tus métodos</a>
+                                            antes de publicar una rifa paga.
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="row g-3" id="rifa_metodos_lista">
+                                        <?php foreach ($metodos_pago as $metodo_item): ?>
+                                            <?php
+                                            $orgmet_id = (int)$metodo_item['orgmet_id'];
+                                            $es_custom = (string)$metodo_item['met_scope'] === 'organizador';
+                                            ?>
+                                            <div class="col-md-6">
+                                                <label class="border border-gray-200 rounded-3 p-3 bg-light d-flex align-items-start gap-3 h-100"
+                                                    for="rifa_metodo_<?php echo $orgmet_id; ?>">
+                                                    <div class="form-check form-check-custom form-check-solid mt-1">
+                                                        <input class="form-check-input" type="checkbox"
+                                                            name="rifa_metodos[]"
+                                                            id="rifa_metodo_<?php echo $orgmet_id; ?>"
+                                                            value="<?php echo $orgmet_id; ?>" />
+                                                    </div>
+                                                    <div class="d-flex flex-column">
+                                                        <span class="fw-bold text-gray-900 fs-7">
+                                                            <?php echo htmlspecialchars((string)$metodo_item['met_nombre'], ENT_QUOTES, 'UTF-8'); ?>
+                                                        </span>
+                                                        <span class="badge <?php echo $es_custom ? 'badge-light-info' : 'badge-light-primary'; ?> fw-bold align-self-start mt-1">
+                                                            <?php echo $es_custom ? 'Propio' : 'Global'; ?>
+                                                        </span>
+                                                        <span class="text-muted fs-8 mt-1">
+                                                            <?php echo htmlspecialchars((string)($metodo_item['met_descripcion'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                                                        </span>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <!--end::Métodos de pago (M05)-->
+
                         <!--begin::Aviso rifa gratuita-->
                         <div class="col-12 d-none" id="aviso_rifa_gratuita">
                             <div class="alert bg-light-info border border-info border-dashed d-flex align-items-start gap-3 mb-0" role="alert">
@@ -3036,6 +3104,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const inputPrecio = document.getElementById('rifa_precio');
         const selectMoneda = document.getElementById('rifa_moneda');
         const esGratuita = selectTipo && selectTipo.value === 'gratuita';
+        const wrapMetodosPago = document.getElementById('wrap_rifa_metodos');
+
+        if (wrapMetodosPago) {
+            wrapMetodosPago.classList.toggle('d-none', esGratuita);
+        }
 
         if (wrapPrecio && inputPrecio && selectMoneda) {
             if (esGratuita) {
@@ -3170,6 +3243,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('rifa_modo_asignacion').value = 'manual';
         document.getElementById('rifa_mostrar_reservados').checked = true;
         document.getElementById('rifa_fecha_sorteo').value = '';
+        document.querySelectorAll('input[name="rifa_metodos[]"]').forEach(function (cb) {
+            cb.checked = false;
+        });
 
         slugManual = false;
         imagenActualUrl = '';
@@ -3245,6 +3321,13 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('rifa_modo_asignacion').value = modoAsignacion === 'automatica' ? 'automatica' : 'manual';
             document.getElementById('rifa_mostrar_reservados').checked = parseInt(campo(d, ['rifa_mostrar_reservados', 'mostrar_reservados'], 1), 10) === 1;
             document.getElementById('rifa_fecha_sorteo').value = fecha_para_input(campo(d, ['rifa_fecha_sorteo', 'fecha_sorteo'], ''));
+
+            const metodosSeleccionados = Array.isArray(d.metodos_pago)
+                ? d.metodos_pago.map(function (id) { return parseInt(id, 10) || 0; })
+                : [];
+            document.querySelectorAll('input[name="rifa_metodos[]"]').forEach(function (cb) {
+                cb.checked = metodosSeleccionados.indexOf(parseInt(cb.value, 10)) !== -1;
+            });
 
             slugManual = true;
             document.getElementById('modal_rifa_titulo').textContent = 'Editar: ' + (campo(d, ['rifa_titulo', 'titulo'], 'rifa'));
@@ -3393,6 +3476,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (tipo === 'gratuita') {
             fd.set('rifa_precio', '0');
             fd.set('rifa_moneda', document.getElementById('rifa_moneda').value || 'USD');
+            fd.delete('rifa_metodos[]');
         }
 
         if (!camposBloqueados) {

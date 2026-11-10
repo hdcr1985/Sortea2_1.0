@@ -110,6 +110,24 @@ $route['monedas/cambiar-status/(:num)']        = 'Monedas/cambiar_status/$1';
 $route['monedas/tasas/(:num)']                 = 'Monedas/tasas/$1';
 $route['monedas/guardar-tasa/(:num)']          = 'Monedas/guardar_tasa/$1';
 
+// ── M05 Métodos de pago ───────────────────────────────────
+$route['metodos-pago']                         = 'MetodosPago/index';
+$route['metodos-pago/tabla']                   = 'MetodosPago/tabla';
+$route['metodos-pago/datos/(:num)']            = 'MetodosPago/datos/$1';
+$route['metodos-pago/crear']                   = 'MetodosPago/crear';
+$route['metodos-pago/actualizar/(:num)']       = 'MetodosPago/actualizar/$1';
+$route['metodos-pago/eliminar/(:num)']         = 'MetodosPago/eliminar/$1';
+$route['metodos-pago/cambiar-status/(:num)']   = 'MetodosPago/cambiar_status/$1';
+
+$route['mis-metodos-pago']                     = 'MisMetodosPago/index';
+$route['mis-metodos-pago/datos/(:num)']        = 'MisMetodosPago/datos/$1';
+$route['mis-metodos-pago/configurar']          = 'MisMetodosPago/configurar';
+$route['mis-metodos-pago/guardar-valores/(:num)'] = 'MisMetodosPago/guardar_valores/$1';
+$route['mis-metodos-pago/crear']               = 'MisMetodosPago/crear';
+$route['mis-metodos-pago/actualizar/(:num)']   = 'MisMetodosPago/actualizar/$1';
+$route['mis-metodos-pago/estado/(:num)']       = 'MisMetodosPago/estado/$1';
+$route['mis-metodos-pago/eliminar/(:num)']     = 'MisMetodosPago/eliminar/$1';
+
 $route['sitio/(:any)']           = 'Publico/index/$1';
 
 /*

@@ -34,6 +34,7 @@ class MisRifas extends MY_Controller
         $this->load->model('Rifa_imagen_model');
         $this->load->model('Rifa_ticket_model');
         $this->load->model('Moneda_model');
+        $this->load->model('Org_metodo_model');
         $this->load->model('Organizador_model');
         $this->load->model('Plan_asignacion_model');
         $this->load->model('Numeracion_model');
@@ -90,6 +91,7 @@ class MisRifas extends MY_Controller
             'plan_info'    => $plan_info,
             'numeraciones' => $this->Numeracion_model->get_activas(),
             'monedas'      => $monedas,
+            'metodos_pago' => $this->Org_metodo_model->get_para_rifa((int)$perfil['org_id']),
             'estados'      => $this->estados,
             'max_imagenes' => 3,
         ]);
@@ -187,6 +189,13 @@ class MisRifas extends MY_Controller
 
         if (!empty($errores)) {
             return $this->json(['ok' => FALSE, 'errores' => $errores], 422);
+        }
+
+        $metodos_ids    = $this->_recoger_metodos_post();
+        $errores_metodos = $this->_validar_metodos_rifa($metodos_ids, $org_id);
+
+        if (!empty($errores_metodos)) {
+            return $this->json(['ok' => FALSE, 'errores' => $errores_metodos], 422);
         }
 
         // Galería: hasta 3 imágenes nuevas. Se conserva además la vía legacy
@@ -306,6 +315,13 @@ class MisRifas extends MY_Controller
                         $this->_borrar_imagen($org_id, $archivo);
                     }
                 }
+            }
+        }
+
+        if (!empty($metodos_ids)) {
+            $sync = $this->Org_metodo_model->sincronizar_rifa((int)$nuevo_id, $org_id, $metodos_ids);
+            if (!$sync['ok']) {
+                log_message('error', 'MisRifas::crear no pudo sincronizar métodos de pago (rifa ' . (int)$nuevo_id . ').');
             }
         }
 
@@ -441,6 +457,24 @@ class MisRifas extends MY_Controller
         $errores = $this->_validar($data, $org_id, (int)$id, $estado_actual);
         if (!empty($errores)) {
             return $this->json(['ok' => FALSE, 'errores' => $errores], 422);
+        }
+
+        $metodos_enviados = $this->_metodos_post_enviados();
+        $metodos_ids      = $this->_recoger_metodos_post();
+
+        if ($metodos_enviados) {
+            $errores_metodos = $this->_validar_metodos_rifa($metodos_ids, $org_id);
+
+            if (empty($errores_metodos)
+                && (string)$rifa['rifa_tipo'] === 'paga'
+                && in_array($estado_actual, ['activa', 'pausada'], TRUE)
+                && empty($metodos_ids)) {
+                $errores_metodos['rifa_metodos'] = 'Una rifa paga activa o pausada debe conservar al menos un método de pago.';
+            }
+
+            if (!empty($errores_metodos)) {
+                return $this->json(['ok' => FALSE, 'errores' => $errores_metodos], 422);
+            }
         }
 
         // Revalidar contra la numeración ya normalizada (p. ej. la derivada
@@ -673,6 +707,13 @@ class MisRifas extends MY_Controller
             $this->_borrar_imagen($org_id, $imagen_anterior);
         }
 
+        if ($metodos_enviados) {
+            $sync = $this->Org_metodo_model->sincronizar_rifa((int)$id, $org_id, $metodos_ids);
+            if (!$sync['ok']) {
+                log_message('error', 'MisRifas::actualizar no pudo sincronizar métodos de pago (rifa ' . (int)$id . ').');
+            }
+        }
+
         $this->bitacora(
             'RIFA_ACTUALIZAR',
             "Rifa actualizada: {$guardado['rifa_titulo']} (ID: {$id})"
@@ -756,6 +797,15 @@ class MisRifas extends MY_Controller
         $rifa = $this->Rifa_model->get_por_id((int)$id, $org_id);
         if (empty($rifa)) {
             return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
+        }
+
+        if ((string)$rifa['rifa_tipo'] === 'paga'
+            && $this->Org_metodo_model->contar_rifa_activos_completos((int)$id) <= 0) {
+            return $this->json([
+                'ok'     => FALSE,
+                'msg'    => 'Selecciona al menos un método de pago activo y completo antes de publicar la rifa.',
+                'motivo' => 'sin_metodos_pago',
+            ], 422);
         }
 
         $errores_escalares = $this->_validar_campos_escalares(['motivo']);
@@ -857,6 +907,15 @@ class MisRifas extends MY_Controller
         $rifa = $this->Rifa_model->get_por_id((int)$id, $org_id);
         if (empty($rifa)) {
             return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
+        }
+
+        if ((string)$rifa['rifa_tipo'] === 'paga'
+            && $this->Org_metodo_model->contar_rifa_activos_completos((int)$id) <= 0) {
+            return $this->json([
+                'ok'     => FALSE,
+                'msg'    => 'Selecciona al menos un método de pago activo y completo antes de reactivar la rifa.',
+                'motivo' => 'sin_metodos_pago',
+            ], 422);
         }
 
         $res = $this->Rifa_model->reactivar((int)$id, $org_id);
@@ -1687,6 +1746,63 @@ class MisRifas extends MY_Controller
     }
 
     /**
+     * Indica si el formulario envió el bloque de métodos de pago.
+     *
+     * @return bool
+     */
+    private function _metodos_post_enviados()
+    {
+        return $this->input->post('rifa_metodos_present') !== NULL
+            || $this->input->post('rifa_metodos') !== NULL;
+    }
+
+    /**
+     * @return array IDs de métodos de pago seleccionados.
+     */
+    private function _recoger_metodos_post()
+    {
+        $raw = $this->input->post('rifa_metodos');
+
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($raw as $valor) {
+            if (is_scalar($valor) && (int)$valor > 0) {
+                $ids[] = (int)$valor;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param  array $ids
+     * @param  int   $org_id
+     * @return array
+     */
+    private function _validar_metodos_rifa(array $ids, $org_id)
+    {
+        $errores = [];
+
+        foreach ($ids as $id) {
+            $metodo = $this->Org_metodo_model->get_por_id((int)$id, (int)$org_id);
+
+            if (empty($metodo)
+                || (int)$metodo['orgmet_activo'] !== 1
+                || (int)$metodo['met_status'] !== 1
+                || (int)$metodo['met_eliminado'] !== 0
+                || empty($metodo['completo'])) {
+                $errores['rifa_metodos'] = 'Uno de los métodos de pago seleccionados no está disponible o está incompleto.';
+                break;
+            }
+        }
+
+        return $errores;
+    }
+
+    /**
      * Recoge y normaliza los campos del formulario.
      *
      * @return array
@@ -2490,6 +2606,9 @@ class MisRifas extends MY_Controller
             $rifa['lote_label'] = $tipo === 'gratuita' ? 'Pendiente de numeración' : 'Sin lote';
         }
 
+        $rifa['metodos_pago']         = $this->Org_metodo_model->get_ids_por_rifa($id);
+        $rifa['metodos_pago_detalle'] = $this->Org_metodo_model->get_rifa_metodos($id);
+
         return $rifa;
     }
 
@@ -2654,6 +2773,7 @@ class MisRifas extends MY_Controller
             'precio_invalido'      => 'Una rifa paga debe tener un precio mayor que cero.',
             'titulo_invalido'      => 'El título de la rifa no es válido.',
             'sin_portada'          => 'Debes subir una imagen de portada antes de publicar la rifa.',
+            'sin_metodos_pago'     => 'Selecciona al menos un método de pago activo y completo antes de publicar la rifa.',
             'no_disponible'        => 'El módulo de rifas aún no está disponible.',
         ];
 

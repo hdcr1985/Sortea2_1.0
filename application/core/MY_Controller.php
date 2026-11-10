@@ -41,6 +41,7 @@ class MY_Controller extends CI_Controller
         'mi-vitrina',
         'mi-tienda', // alias retrocompatible
         'mis-rifas', // autoservicio del organizador (M03)
+        'mis-metodos-pago', // autoservicio del organizador (M05)
     ];
 
     /**
