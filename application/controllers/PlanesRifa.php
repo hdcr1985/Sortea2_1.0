@@ -21,6 +21,7 @@ class PlanesRifa extends MY_Controller
         $this->load->model('Numeracion_model');
         $this->load->model('Moneda_model');
         $this->load->model('Organizador_model');
+        $this->load->model('Plan_compra_model');
 
         $this->page_title = 'Planes de Rifa';
         $this->breadcrumb = [
@@ -179,6 +180,8 @@ class PlanesRifa extends MY_Controller
             . " | Periodo: {$data['plan_periodo']} | Precio: {$data['plan_precio']} {$data['plan_moneda']}"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Plan de rifa creado correctamente.',
@@ -241,6 +244,8 @@ class PlanesRifa extends MY_Controller
             . " | Periodo: {$data['plan_periodo']} | Precio: {$data['plan_precio']} {$data['plan_moneda']}"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Plan de rifa actualizado correctamente.',
@@ -287,6 +292,8 @@ class PlanesRifa extends MY_Controller
             "Plan de rifa eliminado lógicamente: {$plan['plan_nombre']} (ID: {$id})"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Plan de rifa eliminado correctamente.',
@@ -322,6 +329,8 @@ class PlanesRifa extends MY_Controller
 
         $estado_txt = ($res['nuevo_status'] === 1) ? 'activado' : 'desactivado';
         $this->bitacora('PLAN_RIFA_STATUS', "Plan de rifa {$estado_txt}: {$res['plan']['plan_nombre']} (ID: {$id})");
+
+        $this->_sincronizar_ofertas();
 
         $this->json([
             'ok'           => TRUE,
@@ -443,6 +452,8 @@ class PlanesRifa extends MY_Controller
             . " | Cantidad: {$data['num_cantidad']} | Padding: {$data['num_padding']}"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Numeración creada correctamente.',
@@ -501,6 +512,8 @@ class PlanesRifa extends MY_Controller
             . " | Cantidad: {$data['num_cantidad']} | Padding: {$data['num_padding']}"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Numeración actualizada correctamente.',
@@ -547,6 +560,8 @@ class PlanesRifa extends MY_Controller
             "Numeración desactivada: {$numeracion['num_label']} (ID: {$id})"
         );
 
+        $this->_sincronizar_ofertas();
+
         $this->json([
             'ok'  => TRUE,
             'msg' => 'Numeración desactivada correctamente.',
@@ -585,6 +600,8 @@ class PlanesRifa extends MY_Controller
             'NUMERACION_STATUS',
             "Numeración {$estado_txt}: {$res['numeracion']['num_label']} (ID: " . (int)$id . ')'
         );
+
+        $this->_sincronizar_ofertas();
 
         $this->json([
             'ok'           => TRUE,
@@ -997,6 +1014,19 @@ class PlanesRifa extends MY_Controller
      *
      * @return array
      */
+    /**
+     * Refresca las ofertas vendibles de Comprar Planes tras una mutación
+     * administrativa de planes, opciones o numeraciones.
+     *
+     * @return void
+     */
+    private function _sincronizar_ofertas()
+    {
+        if (!$this->Plan_compra_model->sincronizar_todas()) {
+            log_message('error', 'PlanesRifa: no se pudieron sincronizar las ofertas de compra.');
+        }
+    }
+
     private function _recoger_post_plan()
     {
         $raw_precio = str_replace(',', '.', $this->_post_escalar('plan_precio'));
@@ -1243,8 +1273,8 @@ class PlanesRifa extends MY_Controller
             if ($limite !== 0) {
                 $errores['plan_limite'] = 'Los planes ilimitados deben tener cupo 0.';
             }
-            if (!in_array($periodo, ['mensual', 'anual'], TRUE)) {
-                $errores['plan_periodo'] = 'Los planes ilimitados deben ser mensuales o anuales.';
+            if (!in_array($periodo, ['mensual', 'semestral', 'anual'], TRUE)) {
+                $errores['plan_periodo'] = 'Los planes ilimitados deben ser mensuales, semestrales o anuales.';
             }
         }
 
@@ -1834,6 +1864,8 @@ class PlanesRifa extends MY_Controller
         switch ((string)$periodo) {
             case 'mensual':
                 return 'Mensual';
+            case 'semestral':
+                return 'Semestral';
             case 'anual':
                 return 'Anual';
             default:

@@ -60,6 +60,11 @@ $route['comprar-creditos/webhook-btcpay']   = 'Webhook/btcpay';
 $route['pasarelas-de-pago/webhook-btcpay']  = 'Webhook/btcpay';
 $route['pasarelas-de-pago/webhook-stripe']  = 'Webhook/stripe';
 
+// ── M08 Compra de planes/lotes ───────────────────────────────
+// M08: el checkout conserva la URL canónica "comprar-creditos" registrada en
+// cab_menu; el menú se muestra como "Comprar Planes". No se crea un alias sin
+// menú porque MY_Controller aplica deny-by-default por URL registrada.
+
 // ── Multi-tenant M01 — autoservicio y sitio público ──────────
 // Nombre actual: "Mi Vitrina".
 $route['mi-vitrina']              = 'MiVitrina/index';

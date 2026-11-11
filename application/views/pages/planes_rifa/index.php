@@ -333,11 +333,12 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
                         <!--end::Tipo-->
 
                         <!--begin::Vigencia-->
-                        <div class="col-md-6">
+                        <div class="col-md-6 d-none" id="wrap_plan_periodo">
                             <label class="form-label required fw-semibold fs-7 text-gray-800" for="plan_periodo">Vigencia</label>
                             <select name="plan_periodo" id="plan_periodo" class="form-select form-select-solid" required>
                                 <option value="sin_limite" selected>Sin límite</option>
                                 <option value="mensual">Mensual</option>
+                                <option value="semestral">Semestral</option>
                                 <option value="anual">Anual</option>
                             </select>
                             <div class="invalid-feedback" data-error-for="plan_periodo"></div>
@@ -347,7 +348,7 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
 
                         <!--begin::Precio base-->
                         <div class="col-md-6">
-                            <label class="form-label required fw-semibold fs-7 text-gray-800" for="plan_precio">Precio base</label>
+                            <label class="form-label required fw-semibold fs-7 text-gray-800" for="plan_precio" id="label_plan_precio">Precio regular (tachado)</label>
                             <div class="position-relative">
                                 <input type="number"
                                     name="plan_precio"
@@ -363,7 +364,7 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
                                 </span>
                             </div>
                             <div class="invalid-feedback" data-error-for="plan_precio"></div>
-                            <div class="text-muted fs-8 mt-1" id="hint_plan_precio">Precio base de referencia. El precio real se define por numeración.</div>
+                            <div class="text-muted fs-8 mt-1" id="hint_plan_precio">Precio regular de lista. El precio actual se define en cada opción de numeración; si es menor, se mostrará tachado y con descuento.</div>
                         </div>
                         <!--end::Precio base-->
 
@@ -395,7 +396,7 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                                 <div>
                                     <div class="fw-bold text-gray-900 fs-6">Opciones de numeración</div>
-                                    <div class="text-muted fs-8">Cada opción define una numeración y su precio por rifa para este plan.</div>
+                                    <div class="text-muted fs-8">Cada opción define una numeración y su precio actual por rifa. Si es menor que el precio regular, se mostrará como oferta en Comprar Planes.</div>
                                 </div>
                                 <button type="button" class="btn btn-sm btn-light-primary fw-semibold px-4 py-2" id="btn_agregar_opcion_numeracion">
                                     <i class="ki-duotone ki-plus fs-4 me-1">
@@ -1620,9 +1621,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function aplicar_tipo_plan(tipo) {
         const esRifas = (tipo === 'rifas');
         const wrapOpciones = document.getElementById('wrap_plan_opciones');
+        const wrapPeriodo = document.getElementById('wrap_plan_periodo');
         const selectPeriodo = document.getElementById('plan_periodo');
         const hintPeriodo = document.getElementById('hint_plan_periodo');
         const hintPrecio = document.getElementById('hint_plan_precio');
+        const labelPrecio = document.getElementById('label_plan_precio');
         const inputLimite = document.getElementById('plan_limite');
 
         if (inputLimite) {
@@ -1637,22 +1640,32 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        if (wrapPeriodo) {
+            wrapPeriodo.classList.toggle('d-none', esRifas);
+        }
+
         if (esRifas) {
             selectPeriodo.value = 'sin_limite';
             selectPeriodo.disabled = true;
             if (hintPeriodo) {
                 hintPeriodo.textContent = 'Los planes por rifas no caducan.';
             }
+            if (labelPrecio) {
+                labelPrecio.textContent = 'Precio regular (tachado)';
+            }
             if (hintPrecio) {
-                hintPrecio.textContent = 'Precio base de referencia. El precio real se define por numeración.';
+                hintPrecio.textContent = 'Precio regular de lista. El precio actual se define en cada numeración; si es menor, se muestra con descuento.';
             }
         } else {
             selectPeriodo.disabled = false;
             if (selectPeriodo.value === 'sin_limite') {
                 selectPeriodo.value = 'mensual';
             }
+            if (labelPrecio) {
+                labelPrecio.textContent = 'Precio del plan';
+            }
             if (hintPeriodo) {
-                hintPeriodo.textContent = 'Los planes ilimitados tienen vigencia mensual o anual.';
+                hintPeriodo.textContent = 'Los planes ilimitados tienen vigencia mensual, semestral o anual.';
             }
             if (hintPrecio) {
                 hintPrecio.textContent = 'Precio del plan ilimitado.';
@@ -1724,8 +1737,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .concat('    <select class="form-select form-select-solid plan-opcion-num" aria-label="Numeración"></select>')
             .concat('</div>')
             .concat('<div class="col-md-3">')
-            .concat('    <label class="form-label fw-semibold fs-8 text-gray-700">Precio por rifa</label>')
-            .concat('    <input type="number" class="form-control form-control-solid plan-opcion-precio" min="0" step="0.01" placeholder="0.00" aria-label="Precio por rifa" />')
+            .concat('    <label class="form-label fw-semibold fs-8 text-gray-700">Precio actual por rifa</label>')
+            .concat('    <input type="number" class="form-control form-control-solid plan-opcion-precio" min="0" step="0.01" placeholder="0.00" aria-label="Precio actual por rifa" />')
             .concat('</div>')
             .concat('<div class="col-md-2">')
             .concat('    <label class="form-label fw-semibold fs-8 text-gray-700 d-block">Estado</label>')
@@ -2074,6 +2087,8 @@ document.addEventListener('DOMContentLoaded', function () {
         switch (String(periodo || '')) {
             case 'mensual':
                 return 'Mensual';
+            case 'semestral':
+                return 'Semestral';
             case 'anual':
                 return 'Anual';
             default:

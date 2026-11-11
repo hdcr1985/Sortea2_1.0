@@ -1,4 +1,4 @@
-<!--begin::Buy Créditos View-->
+<!--begin::Comprar Planes View-->
 <div class="d-flex flex-column gap-7 gap-lg-10">
 
     <!--begin::Info Banner-->
@@ -29,6 +29,16 @@
 
     <!--begin::Pending Order Alert (if exists)-->
     <?php if (!empty($orden_pendiente)): ?>
+    <?php
+        $pend_es_plan          = (string)($orden_pendiente['pla_tipo'] ?? '') === 'plan_rifa';
+        $pend_cantidad         = (int)($orden_pendiente['mov_sms'] ?? 0);
+        $pend_num_id           = (int)($orden_pendiente['pla_rif_num_id'] ?? 0);
+        $pend_cantidad_label   = !$pend_es_plan
+            ? number_format($pend_cantidad, 0, ',', '.') . ' créditos'
+            : ($pend_num_id > 0
+                ? number_format($pend_cantidad, 0, ',', '.') . ' lote' . ($pend_cantidad === 1 ? '' : 's')
+                : 'Plan ilimitado');
+    ?>
     <div class="alert alert-dismissible bg-light-warning border border-warning border-dashed d-flex flex-column flex-sm-row p-5 mb-2 shadow-xs" id="alerta_orden_pendiente">
         <i class="ki-duotone ki-information-5 fs-2hx text-warning me-4 mb-3 mb-sm-0">
             <span class="path1"></span><span class="path2"></span><span class="path3"></span>
@@ -36,7 +46,7 @@
         <div class="d-flex flex-column pe-0 pe-sm-10 flex-grow-1">
             <h5 class="fw-bold text-gray-900 mb-1">Tienes una orden de compra pendiente (#<?php echo htmlspecialchars($orden_pendiente['mov_id']); ?>)</h5>
             <div class="text-gray-700 fs-7 mb-2">
-                Realizaste una orden de <strong><?php echo htmlspecialchars($orden_pendiente['mov_nomplan']); ?></strong> con <strong><?php echo number_format((int)$orden_pendiente['mov_sms'], 0, ',', '.'); ?> créditos</strong> por un total de <strong><?php echo number_format((float)$orden_pendiente['mov_precioplan'], 2, ',', '.'); ?> <?php echo htmlspecialchars($orden_pendiente['mov_moneda']); ?></strong>.
+                Realizaste una orden de <strong><?php echo htmlspecialchars($orden_pendiente['mov_nomplan']); ?></strong> con <strong><?php echo $pend_cantidad_label; ?></strong> por un total de <strong><?php echo number_format((float)$orden_pendiente['mov_precioplan'], 2, ',', '.'); ?> <?php echo htmlspecialchars($orden_pendiente['mov_moneda']); ?></strong>.
             </div>
             <?php
                 $pend_status         = strtolower(trim((string)($orden_pendiente['mov_statuspag'] ?? '')));
@@ -112,8 +122,8 @@
     <!--begin::Plans Showcase (Pricing Grid)-->
     <div>
         <div class="text-center mb-8">
-            <h2 class="fw-bold text-gray-900 fs-2x mb-2">Planes disponibles</h2>
-            <p class="text-muted fs-6">Elige el paquete de créditos que mejor se adapte a tus necesidades de verificación</p>
+            <h2 class="fw-bold text-gray-900 fs-2x mb-2">Planes de rifa disponibles</h2>
+            <p class="text-muted fs-6">Compra lotes de rifas para tu vitrina. El lote se asigna automáticamente al confirmar el pago.</p>
         </div>
 
         <?php if (empty($planes)): ?>
@@ -128,22 +138,44 @@
         <div class="row g-6 g-xl-9 justify-content-center">
             <?php foreach ($planes as $p): ?>
                 <?php
-                    $id_plan     = (int)$p['pla_id'];
-                    $nombre      = htmlspecialchars($p['pla_nombre'], ENT_QUOTES, 'UTF-8');
-                    $descripcion = htmlspecialchars($p['pla_descripcion'] ?? 'Acceso completo a créditos', ENT_QUOTES, 'UTF-8');
-                    $creditos    = (int)($p['pla_numero'] ?? 0);
-                    $precio      = number_format((float)($p['pla_precio'] ?? 0), 2, ',', '.');
-                    $moneda      = htmlspecialchars($p['pla_moneda'] ?? 'USD', ENT_QUOTES, 'UTF-8');
-                    $stripe      = ((int)($p['pla_paypal'] ?? 0) === 1) && !empty($stripe_disponible);
-                    $crypto      = ((int)($p['pla_crypto'] ?? 0) === 1) && !empty($btcpay_disponible);
+                    $id_plan       = (int)$p['pla_id'];
+                    $nombre        = htmlspecialchars($p['pla_nombre'], ENT_QUOTES, 'UTF-8');
+                    $descripcion   = htmlspecialchars($p['pla_descripcion'] ?: 'Plan de rifas para tu vitrina.', ENT_QUOTES, 'UTF-8');
+                    $es_ilimitado  = (string)($p['plan_tipo'] ?? '') === 'ilimitado'
+                        || (int)($p['pla_rif_num_id'] ?? 0) === 0;
+                    $opcion_label  = trim((string)($p['num_label'] ?? ''));
+                    $periodo_raw   = (string)($p['pla_rif_periodo'] ?? 'sin_limite');
+                    $periodo_label = $periodo_raw === 'mensual'
+                        ? 'mensual'
+                        : ($periodo_raw === 'semestral' ? 'semestral' : ($periodo_raw === 'anual' ? 'anual' : 'sin límite'));
+                    $precio_actual_raw  = (float)($p['pla_precio'] ?? 0);
+                    $precio_regular_raw = (float)($p['pla_precio_regular'] ?? 0);
+                    $precio        = number_format($precio_actual_raw, 2, ',', '.');
+                    $precio_regular = number_format($precio_regular_raw, 2, ',', '.');
+                    $tiene_descuento = $precio_regular_raw > $precio_actual_raw && $precio_regular_raw > 0;
+                    $descuento_pct = $tiene_descuento
+                        ? max(1, (int)round((1 - ($precio_actual_raw / $precio_regular_raw)) * 100))
+                        : 0;
+                    $moneda        = htmlspecialchars($p['pla_moneda'] ?? 'USD', ENT_QUOTES, 'UTF-8');
+                    $stripe        = ((int)($p['pla_paypal'] ?? 0) === 1) && !empty($stripe_disponible);
+                    $crypto        = ((int)($p['pla_crypto'] ?? 0) === 1) && !empty($btcpay_disponible);
+                    $badge_icon    = $es_ilimitado ? 'ki-infinity text-success' : 'ki-diamond text-primary';
+                    $badge_label   = $es_ilimitado ? 'Ilimitado' : ($opcion_label !== '' ? $opcion_label : 'Lote de rifas');
+                    $unidad        = $es_ilimitado
+                        ? ($periodo_raw === 'sin_limite'
+                            ? 'Pago único'
+                            : ($periodo_raw === 'mensual'
+                                ? 'por mes'
+                                : ($periodo_raw === 'semestral' ? 'por semestre' : 'por año')))
+                        : 'por lote';
                 ?>
                 <div class="col-md-6 col-xl-4">
                     <div class="card card-flush h-100 shadow-sm border border-gray-200 hover-elevate-up transition-300">
                         <div class="card-header pt-6 pb-2 border-0">
                             <div class="d-flex flex-column">
-                                <span class="badge badge-light-primary fw-bold fs-7 mb-2 align-self-start">
-                                    <i class="ki-duotone ki-diamond fs-6 text-primary me-1"><span class="path1"></span><span class="path2"></span></i>
-                                    <?php echo number_format($creditos, 0, ',', '.'); ?> Créditos
+                                <span class="badge <?php echo $es_ilimitado ? 'badge-light-success' : 'badge-light-primary'; ?> fw-bold fs-7 mb-2 align-self-start">
+                                    <i class="ki-duotone <?php echo $badge_icon; ?> fs-6 me-1"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>
+                                    <?php echo htmlspecialchars($badge_label, ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                                 <h3 class="card-title fw-bolder text-gray-900 fs-3 mb-1"><?php echo $nombre; ?></h3>
                                 <p class="text-muted fs-7 mb-0"><?php echo $descripcion; ?></p>
@@ -152,10 +184,21 @@
 
                         <div class="card-body pt-2 pb-6">
                             <!--begin::Price-->
-                            <div class="d-flex align-items-baseline my-4 p-4 rounded-3 bg-light">
-                                <span class="fs-1 fw-bolder text-gray-900 me-2"><?php echo $precio; ?></span>
-                                <span class="fs-6 fw-bold text-primary"><?php echo $moneda; ?></span>
-                                <span class="text-muted fs-8 ms-auto">Pago único</span>
+                            <div class="d-flex flex-column my-4 p-4 rounded-3 bg-light gap-1">
+                                <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                    <?php if ($tiene_descuento): ?>
+                                        <span class="text-muted text-decoration-line-through fs-6"><?php echo $precio_regular; ?></span>
+                                        <span class="badge badge-light-danger fw-bold fs-8">-<?php echo $descuento_pct; ?>%</span>
+                                    <?php endif; ?>
+                                    <span class="fs-1 fw-bolder <?php echo $tiene_descuento ? 'text-success' : 'text-gray-900'; ?>"><?php echo $precio; ?></span>
+                                    <span class="fs-6 fw-bold text-primary"><?php echo $moneda; ?></span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-between gap-2">
+                                    <span class="text-muted fs-8"><?php echo htmlspecialchars($unidad, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php if ($tiene_descuento): ?>
+                                        <span class="text-success fs-8 fw-semibold">Precio de lanzamiento</span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <!--end::Price-->
 
@@ -181,18 +224,33 @@
                             <!--begin::Features-->
                             <div class="separator separator-dashed mb-5"></div>
                             <div class="d-flex flex-column gap-3 mb-6 fs-7 text-gray-700">
-                                <div class="d-flex align-items-center">
-                                    <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
-                                    <span>Los créditos no expiran</span>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
-                                    <span>Verificaciones SMS instantáneas</span>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
-                                    <span>Recarga automática de créditos al pagar</span>
-                                </div>
+                                <?php if ($es_ilimitado): ?>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Rifas ilimitadas mientras el plan esté vigente</span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Vigencia <?php echo htmlspecialchars($periodo_label, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Renovación manual al vencer</span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Lote para tu vitrina: <?php echo htmlspecialchars($opcion_label !== '' ? $opcion_label : 'rifas', ENT_QUOTES, 'UTF-8'); ?></span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Se asigna automáticamente al confirmar el pago</span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <i class="ki-duotone ki-check-circle fs-5 text-success me-2"><span class="path1"></span><span class="path2"></span></i>
+                                        <span>Puedes comprar varios lotes en una sola orden</span>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <!--end::Features-->
 
@@ -220,7 +278,7 @@
             <div class="card-title">
                 <div class="d-flex flex-column">
                     <h3 class="fw-bold text-gray-900 mb-1">Historial de compras</h3>
-                    <span class="text-muted fs-7">Consulta órdenes, pagos y recargas de créditos.</span>
+                    <span class="text-muted fs-7">Consulta órdenes, pagos y lotes de rifas adquiridos.</span>
                 </div>
             </div>
             <div class="card-toolbar gap-3 flex-wrap">
@@ -270,7 +328,7 @@
                         <tr class="text-start text-gray-500 fw-bold fs-7 text-uppercase gs-0 border-bottom border-gray-200">
                             <th scope="col" class="min-w-150px">Orden #</th>
                             <th scope="col" class="min-w-200px">Plan</th>
-                            <th scope="col" class="min-w-125px text-end">Créditos</th>
+                            <th scope="col" class="min-w-125px text-end">Lotes</th>
                             <th scope="col" class="min-w-125px text-end">Monto</th>
                             <th scope="col" class="min-w-150px text-center">Estado del pago</th>
                             <th scope="col" class="min-w-175px">Fecha de la orden</th>
@@ -285,7 +343,7 @@
     <!--end::Order History Card-->
 
 </div>
-<!--end::Buy Créditos View-->
+<!--end::Comprar Planes View-->
 
 <!--begin::Confirm Purchase Modal-->
 <div class="modal fade" id="modal_confirmar_compra" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -312,25 +370,52 @@
 
                 <!--begin::Plan Summary-->
                 <div class="border border-gray-200 rounded-3 p-5 bg-light mb-6">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 gap-3">
                         <span class="text-muted fs-7">Plan seleccionado:</span>
-                        <span class="fw-bold text-gray-900 fs-6" id="conf_plan_nombre">-</span>
+                        <span class="fw-bold text-gray-900 fs-6 text-end" id="conf_plan_nombre">-</span>
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="text-muted fs-7">Créditos a recibir:</span>
-                        <span class="badge badge-light-primary fw-bold fs-7" id="conf_plan_creditos">-</span>
+                    <div class="d-flex justify-content-between align-items-center mb-3 gap-3 d-none" id="conf_cantidad_wrap">
+                        <label for="conf_cantidad" class="text-muted fs-7">Cantidad de lotes:</label>
+                        <input type="number"
+                            id="conf_cantidad"
+                            class="form-control form-control-solid form-control-sm w-100px text-end"
+                            min="1"
+                            max="10000"
+                            step="1"
+                            value="1"
+                            inputmode="numeric"
+                            aria-label="Cantidad de lotes" />
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 gap-3">
+                        <span class="text-muted fs-7">Incluye:</span>
+                        <span class="badge badge-light-primary fw-bold fs-7 text-end" id="conf_plan_incluye">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 gap-3 d-none" id="conf_regular_wrap">
+                        <span class="text-muted fs-7">Precio regular:</span>
+                        <span class="text-muted text-decoration-line-through fs-7 text-end" id="conf_plan_precio_regular">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 gap-3">
+                        <span class="text-muted fs-7" id="conf_precio_label">Precio de lanzamiento:</span>
+                        <span class="fw-semibold text-gray-800 fs-7 text-end">
+                            <span id="conf_plan_precio_unitario">-</span>
+                            <span class="badge badge-light-danger fw-bold fs-8 ms-1 d-none" id="conf_descuento_badge">-0%</span>
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center gap-3" id="conf_vigencia_wrap">
+                        <span class="text-muted fs-7">Vigencia:</span>
+                        <span class="fw-semibold text-gray-800 fs-7 text-end" id="conf_plan_vigencia">-</span>
                     </div>
                     <div class="separator separator-dashed my-3"></div>
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center gap-3">
                         <span class="fw-bold text-gray-900 fs-6">Monto total a pagar:</span>
-                        <span class="fw-bolder text-primary fs-4" id="conf_plan_precio">-</span>
+                        <span class="fw-bolder text-primary fs-4 text-end" id="conf_plan_precio">-</span>
                     </div>
                 </div>
                 <!--end::Plan Summary-->
 
                 <div class="text-gray-700 fs-8 mb-2">
                     <i class="ki-duotone ki-information-2 text-info fs-6 me-1"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
-                    Al confirmar, se generará tu orden de compra. Luego podrás completar el pago con el método que elijas.
+                    Al confirmar, se generará tu orden de compra. El lote se asignará a tu vitrina cuando el pago sea confirmado.
                 </div>
             </div>
 
@@ -363,6 +448,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const modalConfirmarEl = document.getElementById('modal_confirmar_compra');
     const modalConfirmar = new bootstrap.Modal(modalConfirmarEl);
     const btnConfirmar = document.getElementById('btn_confirmar_procesar');
+    const confCantidadWrap = document.getElementById('conf_cantidad_wrap');
+    const confCantidad = document.getElementById('conf_cantidad');
+    let confPrecioUnitario = 0;
+    let confMoneda = 'USD';
+    let confEsIlimitado = true;
     const inputFiltro = document.getElementById('filtro_ordenes');
     const btnLimpiarFiltro = document.getElementById('btn_limpiar_filtro');
     const filtroEstado = document.getElementById('filtro_estado');
@@ -446,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
         columns: [
             { data: 'orden', orderable: true, responsivePriority: 1 },
             { data: 'plan', orderable: true, responsivePriority: 3 },
-            { data: 'creditos', orderable: true, className: 'text-end', responsivePriority: 4 },
+            { data: 'cantidad', orderable: true, className: 'text-end', responsivePriority: 4 },
             { data: 'monto', orderable: true, className: 'text-end', responsivePriority: 3 },
             { data: 'estado', orderable: true, className: 'text-center', responsivePriority: 2 },
             { data: 'fecha', orderable: true, responsivePriority: 2 },
@@ -548,6 +638,40 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function formatearMonto(valor) {
+        return Number(valor || 0).toLocaleString('es-VE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function cantidadConfirmacion() {
+        if (confEsIlimitado) return 1;
+
+        const raw = (confCantidad.value || '').trim();
+        const cantidad = Number(raw);
+
+        if (!/^\d+$/.test(raw) || !Number.isInteger(cantidad) || cantidad < 1 || cantidad > 10000) {
+            return null;
+        }
+
+        return cantidad;
+    }
+
+    function actualizarTotalConfirmacion() {
+        const cantidad = cantidadConfirmacion();
+        const totalEl = document.getElementById('conf_plan_precio');
+
+        if (cantidad === null) {
+            totalEl.textContent = '—';
+            return null;
+        }
+
+        const total = confPrecioUnitario * cantidad;
+        totalEl.textContent = formatearMonto(total) + ' ' + confMoneda;
+        return { cantidad: cantidad, total: total };
+    }
+
     function abrir_confirmacion_compra(idPlan, trigger) {
         if (!idPlan) return;
 
@@ -567,11 +691,46 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const p = res.plan;
+            const esIlimitado = Number(p.pla_rif_num_id) === 0;
+            const periodo = p.pla_rif_periodo || 'sin_limite';
+            const periodoLabel = periodo === 'mensual'
+                ? 'Mensual'
+                : (periodo === 'semestral' ? 'Semestral' : (periodo === 'anual' ? 'Anual' : 'Sin límite'));
+            const opcionLabel = (p.num_label || '').trim();
+
+            const precioRegular = Number(p.pla_precio_regular_raw) || 0;
+            const tieneDescuento = !esIlimitado && precioRegular > confPrecioUnitario;
+
+            confEsIlimitado = esIlimitado;
+            confPrecioUnitario = Number(p.pla_precio_raw) || 0;
+            confMoneda = p.pla_moneda || 'USD';
+
             document.getElementById('conf_plan_id').value = p.pla_id;
             document.getElementById('conf_plan_nombre').textContent = p.pla_nombre;
-            document.getElementById('conf_plan_creditos').textContent = Number(p.pla_numero).toLocaleString('es-VE') + ' créditos';
-            document.getElementById('conf_plan_precio').textContent = p.pla_precio + ' ' + p.pla_moneda;
+            document.getElementById('conf_plan_incluye').textContent = esIlimitado
+                ? 'Rifas ilimitadas'
+                : (opcionLabel !== '' ? opcionLabel : 'Lote de rifas');
+            document.getElementById('conf_plan_precio_regular').textContent = p.pla_precio_regular + ' ' + confMoneda;
+            document.getElementById('conf_regular_wrap').classList.toggle('d-none', !tieneDescuento);
+            const descuentoBadge = document.getElementById('conf_descuento_badge');
+            descuentoBadge.textContent = '-' + Number(p.descuento_pct || 0) + '%';
+            descuentoBadge.classList.toggle('d-none', !tieneDescuento);
+            const unidadPrecio = esIlimitado
+                ? (periodo === 'mensual'
+                    ? ' / mes'
+                    : (periodo === 'semestral' ? ' / semestre' : (periodo === 'anual' ? ' / año' : '')))
+                : ' / lote';
+            document.getElementById('conf_precio_label').textContent = esIlimitado
+                ? 'Precio del plan:'
+                : 'Precio de lanzamiento:';
+            document.getElementById('conf_plan_precio_unitario').textContent = p.pla_precio + ' ' + confMoneda + unidadPrecio;
+            document.getElementById('conf_plan_vigencia').textContent = esIlimitado ? periodoLabel : 'Sin límite';
 
+            confCantidadWrap.classList.toggle('d-none', esIlimitado);
+            confCantidad.disabled = esIlimitado;
+            confCantidad.value = '1';
+
+            actualizarTotalConfirmacion();
             modalConfirmar.show();
         })
         .catch(() => {
@@ -598,16 +757,29 @@ document.addEventListener('DOMContentLoaded', function() {
         abrir_confirmacion_compra(btnRecomprar.dataset.id, btnRecomprar);
     });
 
+    if (confCantidad) {
+        confCantidad.addEventListener('input', actualizarTotalConfirmacion);
+        confCantidad.addEventListener('change', actualizarTotalConfirmacion);
+    }
+
     // Confirm and process order
     btnConfirmar.addEventListener('click', function() {
         const idPlan = document.getElementById('conf_plan_id').value;
         if (!idPlan || idPlan === '0') return;
+
+        const seleccion = actualizarTotalConfirmacion();
+        if (!seleccion) {
+            mostrar_alerta('warning', 'Indica una cantidad de lotes entre 1 y 10.000.');
+            confCantidad.focus();
+            return;
+        }
 
         btnConfirmar.setAttribute('data-kt-indicator', 'on');
         btnConfirmar.disabled = true;
 
         const fd = new FormData();
         fd.append('id_plan', idPlan);
+        fd.append('cantidad', String(seleccion.cantidad));
 
         fetch(BASE_URL + 'procesar_compra', {
             method: 'POST',

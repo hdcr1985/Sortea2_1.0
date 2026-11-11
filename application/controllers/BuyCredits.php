@@ -18,6 +18,8 @@ class BuyCredits extends MY_Controller
         parent::__construct();
 
         $this->load->model('Buy_credits_model');
+        $this->load->model('Plan_compra_model');
+        $this->load->model('Organizador_model');
         $this->load->model('Configuracion_pasarelas_model');
         $this->load->library('btcpay_client');
         $this->load->library('stripe_client');
@@ -33,10 +35,10 @@ class BuyCredits extends MY_Controller
             && (int)($btcpay['pas_activo'] ?? 0) === 1
             && $this->btcpay_client->configuracion_webhook_valida($btcpay);
 
-        $this->page_title = 'Comprar Créditos';
+        $this->page_title = 'Comprar Planes';
         $this->breadcrumb = [
-            ['titulo' => 'Inicio',        'url' => base_url('dashboard')],
-            ['titulo' => 'Comprar Créditos', 'url' => ''],
+            ['titulo' => 'Inicio',          'url' => base_url('dashboard')],
+            ['titulo' => 'Comprar Planes',  'url' => ''],
         ];
 
         $this->page_styles = [
@@ -49,7 +51,7 @@ class BuyCredits extends MY_Controller
 
     /**
      * GET /comprar-creditos or /BuyCredits/index
-     * Renders the plans showcase and user's order history.
+     * Renders the plan/lote showcase and user's order history.
      */
     public function index()
     {
@@ -57,11 +59,20 @@ class BuyCredits extends MY_Controller
 
         $id_usuario = (string)($this->usuario['usu_id'] ?? '');
 
+        // Las ofertas se sincronizan desde las mutaciones administrativas de
+        // Planes de Rifa, no desde una vista GET de solo lectura.
+        $perfil       = $this->Organizador_model->get_por_usuario($id_usuario);
+        $org_id       = (int)($perfil['org_id'] ?? 0);
+        $tiene_vitrina = ($org_id > 0);
+
         $datos = [
-            'url_base'        => $this->url_base,
-            'planes'            => $this->Buy_credits_model->get_planes_activos(),
+            'url_base'          => $this->url_base,
+            'planes'            => $this->Plan_compra_model->get_ofertas_activas(),
             'orden_pendiente'   => $this->Buy_credits_model->get_orden_pendiente_usuario($id_usuario),
             'usuario'           => $this->usuario,
+            'org_id'            => $org_id,
+            'tiene_vitrina'     => $tiene_vitrina,
+            'organizador'       => $perfil,
             'stripe_disponible' => $this->stripe_disponible,
             'btcpay_disponible' => $this->btcpay_disponible,
         ];
@@ -71,7 +82,7 @@ class BuyCredits extends MY_Controller
 
     /**
      * POST /BuyCredits/confirmar/:id (AJAX)
-     * Returns plan details for the purchase confirmation modal.
+     * Returns plan/lote details for the purchase confirmation modal.
      */
     public function confirmar($id_plan = 0)
     {
@@ -82,31 +93,48 @@ class BuyCredits extends MY_Controller
         $this->autorizar_accion('consultar', 'No tienes permiso para ver este plan.');
 
         $id_plan = (int)$id_plan;
-        $plan = $this->Buy_credits_model->get_plan_por_id($id_plan);
+        $plan = $this->Plan_compra_model->get_oferta($id_plan);
 
         if (empty($plan)) {
             return $this->json(['ok' => FALSE, 'msg' => 'El plan seleccionado no existe o no está disponible.'], 404);
         }
 
+        $precio_actual  = (float)$plan['pla_precio'];
+        $precio_regular = (float)($plan['pla_precio_regular'] ?? 0);
+        $descuento_pct  = ($precio_regular > $precio_actual && $precio_regular > 0)
+            ? max(1, (int)round((1 - ($precio_actual / $precio_regular)) * 100))
+            : 0;
+
         $this->json([
             'ok'   => TRUE,
             'plan' => [
-                'pla_id'          => (int)$plan['pla_id'],
-                'pla_nombre'      => (string)$plan['pla_nombre'],
-                'pla_descripcion' => (string)($plan['pla_descripcion'] ?? ''),
-                'pla_numero'      => (int)$plan['pla_numero'],
-                'pla_precio'      => number_format((float)$plan['pla_precio'], 2, ',', '.'),
-                'pla_precio_raw'  => (float)$plan['pla_precio'],
-                'pla_moneda'      => (string)($plan['pla_moneda'] ?? 'USD'),
-                'pla_paypal'      => (int)($plan['pla_paypal'] ?? 0),
-                'pla_crypto'      => (int)($plan['pla_crypto'] ?? 0),
+                'pla_id'           => (int)$plan['pla_id'],
+                'pla_nombre'       => (string)$plan['pla_nombre'],
+                'pla_descripcion'  => (string)($plan['pla_descripcion'] ?? ''),
+                'pla_numero'       => (int)($plan['pla_numero'] ?? 0),
+                'pla_precio'       => number_format($precio_actual, 2, ',', '.'),
+                'pla_precio_raw'   => $precio_actual,
+                'pla_precio_regular' => number_format($precio_regular, 2, ',', '.'),
+                'pla_precio_regular_raw' => $precio_regular,
+                'descuento_pct'    => $descuento_pct,
+                'descuento_aplicado' => $descuento_pct > 0,
+                'pla_moneda'       => (string)($plan['pla_moneda'] ?? 'USD'),
+                'pla_tipo'         => (string)($plan['pla_tipo'] ?? 'plan_rifa'),
+                'plan_tipo'        => (string)($plan['plan_tipo'] ?? ''),
+                'plan_periodo'     => (string)($plan['plan_periodo'] ?? ''),
+                'num_label'        => (string)($plan['num_label'] ?? ''),
+                'pla_rif_num_id'   => (int)($plan['pla_rif_num_id'] ?? 0),
+                'pla_rif_periodo'  => (string)($plan['pla_rif_periodo'] ?? 'sin_limite'),
+                'pla_paypal'       => (int)($plan['pla_paypal'] ?? 0),
+                'pla_crypto'       => (int)($plan['pla_crypto'] ?? 0),
             ],
         ]);
     }
 
     /**
      * POST /BuyCredits/procesar_compra (AJAX)
-     * Generates purchase order transaction in cab_movplanes and cab_movsms.
+     * Generates the purchase order in cab_movplanes and, for plan_rifa, the
+     * pending row in rif_plan_compras.
      */
     public function procesar_compra()
     {
@@ -122,16 +150,48 @@ class BuyCredits extends MY_Controller
         $id_usuario = (string)($this->usuario['usu_id'] ?? '');
         $id_plan    = (int)$this->_post_escalar('id_plan');
 
-        $plan = $this->Buy_credits_model->get_plan_por_id($id_plan);
+        $plan = $this->Plan_compra_model->get_oferta($id_plan);
         if (empty($plan)) {
             return $this->json(['ok' => FALSE, 'msg' => 'El plan seleccionado no es válido o fue retirado.'], 404);
         }
 
         $plan_currency = strtoupper(trim((string)($plan['pla_moneda'] ?? '')));
         if ((float)($plan['pla_precio'] ?? 0) <= 0
-            || (int)($plan['pla_numero'] ?? 0) <= 0
+            || (int)($plan['pla_rif_plan_id'] ?? 0) <= 0
             || !preg_match('/^[A-Z]{3,10}$/', $plan_currency)) {
-            return $this->json(['ok' => FALSE, 'msg' => 'Este plan tiene precio, créditos o moneda inválidos. Contacta al administrador.'], 422);
+            return $this->json(['ok' => FALSE, 'msg' => 'Este plan tiene precio, plan o moneda inválidos. Contacta al administrador.'], 422);
+        }
+
+        // La vitrina activa es obligatoria: el lote se asigna al organizador.
+        $perfil = $this->Organizador_model->get_por_usuario($id_usuario);
+        $org_id = (int)($perfil['org_id'] ?? 0);
+        if ($org_id <= 0) {
+            return $this->json([
+                'ok'  => FALSE,
+                'msg' => 'Necesitas una vitrina activa para comprar planes. Actívala desde Mi Vitrina e inténtalo de nuevo.',
+            ], 422);
+        }
+
+        // Cantidad: 1..10000 para planes finitos; 1 para ilimitados.
+        $cantidad_raw = $this->_post_escalar('cantidad');
+
+        if ($cantidad_raw === '') {
+            $cantidad = 1;
+        } elseif (!ctype_digit($cantidad_raw)) {
+            return $this->json([
+                'ok'  => FALSE,
+                'msg' => 'La cantidad de lotes debe ser un número entero entre 1 y 10.000.',
+            ], 422);
+        } else {
+            $cantidad = (int)$cantidad_raw;
+        }
+
+        if ((int)($plan['pla_rif_num_id'] ?? 0) > 0) {
+            if ($cantidad < 1 || $cantidad > 10000) {
+                return $this->json(['ok' => FALSE, 'msg' => 'La cantidad de lotes debe estar entre 1 y 10.000.'], 422);
+            }
+        } else {
+            $cantidad = 1;
         }
 
         $plan_card   = (int)($plan['pla_paypal'] ?? 0) === 1 && $this->stripe_disponible;
@@ -152,7 +212,7 @@ class BuyCredits extends MY_Controller
         }
 
         // Generate order in DB
-        $mov_id = $this->Buy_credits_model->procesar_compra($id_usuario, $plan);
+        $mov_id = $this->Buy_credits_model->procesar_compra($id_usuario, $plan, $cantidad, $org_id);
 
         if (!$mov_id) {
             // A concurrent request may have created the pending order while
@@ -169,10 +229,17 @@ class BuyCredits extends MY_Controller
             return $this->json(['ok' => FALSE, 'msg' => 'Ocurrió un error al crear la orden de compra. Inténtalo de nuevo.'], 500);
         }
 
+        $precio_unitario = (float)$plan['pla_precio'];
+        $total = ((int)$plan['pla_rif_num_id'] > 0)
+            ? round($precio_unitario * $cantidad, 2)
+            : round($precio_unitario, 2);
+
         // Audit log
         $this->bitacora(
-            'COMPRA_ORDEN_CREAR',
-            "Orden de compra creada: #{$mov_id} | Plan: {$plan['pla_nombre']} (ID: {$id_plan}) | Monto: {$plan['pla_precio']} {$plan['pla_moneda']} | Créditos: {$plan['pla_numero']}"
+            'PLAN_COMPRA_CREAR',
+            "Orden de compra de plan creada: #{$mov_id} | Plan: {$plan['pla_nombre']} (ID: {$id_plan})"
+            . " | Cantidad: {$cantidad} | Monto: " . number_format($total, 2, '.', '') . " {$plan['pla_moneda']}"
+            . " | Organizador: {$org_id}"
         );
 
         $this->json([
@@ -632,10 +699,16 @@ class BuyCredits extends MY_Controller
             $buyer_email = '';
         }
 
-        $plan_name = trim((string)($orden['mov_nomplan'] ?? 'Plan de créditos'));
+        $plan_name = trim((string)($orden['mov_nomplan'] ?? 'Plan de rifa'));
         $plan_desc = trim((string)($orden['pla_descripcion'] ?? ''));
         if ($plan_desc === '') {
-            $plan_desc = (int)($orden['mov_sms'] ?? 0) . ' créditos para tu cuenta.';
+            if ((string)($orden['pla_tipo'] ?? '') === 'plan_rifa') {
+                $plan_desc = (int)($orden['pla_rif_num_id'] ?? 0) > 0
+                    ? (int)($orden['mov_sms'] ?? 0) . ' rifas para tu organizador.'
+                    : 'Plan ilimitado para tu organizador.';
+            } else {
+                $plan_desc = (int)($orden['mov_sms'] ?? 0) . ' créditos para tu cuenta.';
+            }
         }
 
         $success_url = base_url('comprar-creditos') . '?stripe=success&session_id={CHECKOUT_SESSION_ID}';
@@ -862,6 +935,8 @@ class BuyCredits extends MY_Controller
             $nomplan       = htmlspecialchars((string)($r['mov_nomplan'] ?? ''), ENT_QUOTES, 'UTF-8');
             $descplan      = htmlspecialchars(trim((string)($r['pla_descripcion'] ?? '')), ENT_QUOTES, 'UTF-8');
             $sms           = (int)($r['mov_sms'] ?? 0);
+            $es_plan_rifa  = (string)($r['pla_tipo'] ?? '') === 'plan_rifa';
+            $rif_num_id    = (int)($r['pla_rif_num_id'] ?? 0);
             $precio        = number_format((float)($r['mov_precioplan'] ?? 0), 2, ',', '.');
             $moneda        = htmlspecialchars((string)($r['mov_moneda'] ?? 'USD'), ENT_QUOTES, 'UTF-8');
             $pago_status   = strtolower(trim((string)($r['mov_statuspag'] ?? '')));
@@ -990,7 +1065,17 @@ class BuyCredits extends MY_Controller
                                   <span class="fw-bold text-gray-900 fs-7 text-nowrap">#' . $mov_id . '</span>
                               </div>',
                 'plan'     => $plan_html,
-                'creditos' => '<span class="badge badge-light-primary fw-bold px-2 py-1 text-nowrap">
+                'cantidad' => $es_plan_rifa
+                    ? ($rif_num_id > 0
+                        ? '<span class="badge badge-light-primary fw-bold px-2 py-1 text-nowrap">
+                                  <i class="ki-duotone ki-diamond fs-6 text-primary me-1" aria-hidden="true"><span class="path1"></span><span class="path2"></span></i>
+                                  ' . number_format($sms, 0, ',', '.') . ' Lote' . ($sms === 1 ? '' : 's') . '
+                              </span>'
+                        : '<span class="badge badge-light-success fw-bold px-2 py-1 text-nowrap">
+                                  <i class="ki-duotone ki-infinity fs-6 text-success me-1" aria-hidden="true"><span class="path1"></span><span class="path2"></span><span class="path3"></span><span class="path4"></span></i>
+                                  Ilimitado
+                              </span>')
+                    : '<span class="badge badge-light-primary fw-bold px-2 py-1 text-nowrap">
                                   <i class="ki-duotone ki-diamond fs-6 text-primary me-1" aria-hidden="true"><span class="path1"></span><span class="path2"></span></i>
                                   ' . number_format($sms, 0, ',', '.') . ' Créditos
                               </span>',
@@ -1373,7 +1458,11 @@ class BuyCredits extends MY_Controller
             'metadata' => [
                 'orderId'      => (string)$orden['mov_id'],
                 'itemCode'     => (string)$orden['mov_idplan'],
-                'itemDesc'     => (string)$orden['mov_nomplan'] . ' incluye ' . (int)$orden['mov_sms'] . ' créditos',
+                'itemDesc'     => (string)$orden['mov_nomplan'] . (((string)($orden['pla_tipo'] ?? '') === 'plan_rifa')
+                    ? ((int)($orden['pla_rif_num_id'] ?? 0) > 0
+                        ? ' incluye ' . (int)$orden['mov_sms'] . ' rifas'
+                        : ' plan ilimitado')
+                    : ' incluye ' . (int)$orden['mov_sms'] . ' créditos'),
                 'buyerName'    => $buyer_name,
                 'buyerEmail'   => (string)($this->usuario['usu_correo'] ?? ''),
                 'buyerCountry' => $buyer_country,

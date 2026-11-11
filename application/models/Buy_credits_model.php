@@ -30,6 +30,9 @@ class Buy_credits_model extends CI_Model
     public function __construct()
     {
         parent::__construct();
+
+        // M08: el settlement de una orden de plan de rifa debe crear el lote.
+        $this->load->model('Plan_compra_model');
     }
 
     /**
@@ -101,7 +104,8 @@ class Buy_credits_model extends CI_Model
     private function _datatable_query($id_usuario, $search = '', $estado = '')
     {
         $this->db
-            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto, p.pla_status, p.pla_eliminado')
+            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto, p.pla_status, p.pla_eliminado,'
+                . ' p.pla_tipo, p.pla_rif_plan_id, p.pla_rif_num_id, p.pla_rif_periodo')
             ->from($this->tabla_ordenes . ' m')
             ->join($this->tabla_planes . ' p', 'p.pla_id = m.mov_idplan', 'left')
             ->where('m.mov_idusuario', (string)$id_usuario);
@@ -199,7 +203,8 @@ class Buy_credits_model extends CI_Model
     public function get_orden_pendiente_usuario($id_usuario)
     {
         return $this->db
-            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto')
+            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto,'
+                . ' p.pla_tipo, p.pla_rif_plan_id, p.pla_rif_num_id, p.pla_rif_periodo')
             ->from($this->tabla_ordenes . ' m')
             ->join($this->tabla_planes . ' p', 'p.pla_id = m.mov_idplan', 'left')
             ->where('m.mov_idusuario', (string)$id_usuario)
@@ -222,7 +227,8 @@ class Buy_credits_model extends CI_Model
     public function get_historial_ordenes($id_usuario, $limit = 20)
     {
         return $this->db
-            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto')
+            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto,'
+                . ' p.pla_tipo, p.pla_rif_plan_id, p.pla_rif_num_id, p.pla_rif_periodo')
             ->from($this->tabla_ordenes . ' m')
             ->join($this->tabla_planes . ' p', 'p.pla_id = m.mov_idplan', 'left')
             ->where('m.mov_idusuario', (string)$id_usuario)
@@ -243,7 +249,8 @@ class Buy_credits_model extends CI_Model
     public function get_orden_por_id($mov_id, $id_usuario = NULL)
     {
         $this->db
-            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto')
+            ->select('m.*, p.pla_descripcion, p.pla_paypal, p.pla_crypto,'
+                . ' p.pla_tipo, p.pla_rif_plan_id, p.pla_rif_num_id, p.pla_rif_periodo')
             ->from($this->tabla_ordenes . ' m')
             ->join($this->tabla_planes . ' p', 'p.pla_id = m.mov_idplan', 'left')
             ->where('m.mov_id', (string)$mov_id);
@@ -256,17 +263,81 @@ class Buy_credits_model extends CI_Model
     }
 
     /**
-     * Processes a plan purchase creating the order in cab_movplanes and cab_movsms.
-     * Executes atomic transaction and generates unique sequential ID.
+     * Processes a purchase creating the order in cab_movplanes.
+     *
+     * - `plan_rifa`: creates cab_movplanes + rif_plan_compras (no cab_movsms).
+     * - `creditos`: keeps the historical behavior (cab_movsms detail).
      *
      * @param  string $id_usuario
      * @param  array  $plan
+     * @param  int    $cantidad
+     * @param  int    $org_id
      * @return string|false Generated order ID or FALSE on failure
      */
-    public function procesar_compra($id_usuario, array $plan)
+    public function procesar_compra($id_usuario, array $plan, $cantidad = 1, $org_id = 0)
     {
-        $precio  = (float)($plan['pla_precio'] ?? 0);
+        $tipo    = (string)($plan['pla_tipo'] ?? 'creditos');
+        $precio  = round((float)($plan['pla_precio'] ?? 0), 2);
         $moneda  = strtoupper(trim((string)($plan['pla_moneda'] ?? 'USD')));
+
+        if ($tipo === 'plan_rifa') {
+            $rif_plan_id = (int)($plan['pla_rif_plan_id'] ?? 0);
+            $rif_num_id  = (int)($plan['pla_rif_num_id'] ?? 0);
+            $org_id      = (int)$org_id;
+
+            if ($rif_plan_id <= 0 || $org_id <= 0 || $precio <= 0
+                || !preg_match('/^[A-Z]{3,10}$/', $moneda)) {
+                return FALSE;
+            }
+
+            if ($rif_num_id > 0) {
+                $cantidad = (int)$cantidad;
+                if ($cantidad < 1 || $cantidad > 10000) {
+                    return FALSE;
+                }
+                $total = round($precio * $cantidad, 2);
+            } else {
+                // Los planes ilimitados compran un único periodo.
+                $cantidad = 1;
+                $total    = $precio;
+            }
+
+            $periodo = $rif_num_id > 0
+                ? 'sin_limite'
+                : (string)($plan['pla_rif_periodo'] ?? 'sin_limite');
+
+            if (!in_array($periodo, ['sin_limite', 'mensual', 'semestral', 'anual'], TRUE)) {
+                $periodo = 'sin_limite';
+            }
+
+            // Serialize purchase creation per user with an advisory lock.
+            $lock_name = 'vc_buy_' . substr(hash('sha256', (string)$id_usuario), 0, 40);
+            $lock_row  = $this->db
+                ->query('SELECT GET_LOCK(?, 5) AS l', [$lock_name])
+                ->row_array();
+
+            if (empty($lock_row) || (int)($lock_row['l'] ?? 0) !== 1) {
+                return FALSE;
+            }
+
+            try {
+                return $this->_procesar_compra_plan_bloqueada(
+                    $id_usuario,
+                    $plan,
+                    $rif_plan_id,
+                    $rif_num_id,
+                    $cantidad,
+                    $periodo,
+                    $precio,
+                    $moneda,
+                    $total,
+                    $org_id
+                );
+            } finally {
+                $this->db->query('SELECT RELEASE_LOCK(?)', [$lock_name]);
+            }
+        }
+
         $creditos = (int)($plan['pla_numero'] ?? 0);
 
         if ($precio <= 0 || $creditos <= 0 || !preg_match('/^[A-Z]{3,10}$/', $moneda)) {
@@ -306,13 +377,7 @@ class Buy_credits_model extends CI_Model
     {
         $this->db->trans_start();
 
-        $pendiente = $this->db
-            ->where('mov_idusuario', (string)$id_usuario)
-            ->where_in('mov_status', ['A', 'V'])
-            ->where_in('mov_statuspag', ['NoPagado', 'waiting', 'in_process', 'in_process_partial'])
-            ->count_all_results($this->tabla_ordenes);
-
-        if ($pendiente > 0) {
+        if ($this->_tiene_orden_pendiente($id_usuario)) {
             $this->db->trans_complete();
             return FALSE;
         }
@@ -320,20 +385,7 @@ class Buy_credits_model extends CI_Model
         $now_date = date('Y-m-d');
         $now_time = date('H:i:s');
 
-        $mov_id = FALSE;
-        for ($intento = 0; $intento < 10; $intento++) {
-            // 1. Generate a 10-char order ID using a CSPRNG (not predictable).
-            $conteo     = $this->db->count_all($this->tabla_ordenes);
-            $secuencial = str_pad((string)($conteo + 1), 7, '0', STR_PAD_LEFT);
-            $random     = str_pad((string)random_int(100, 999), 3, '0', STR_PAD_LEFT);
-            $candidato  = $secuencial . $random;
-
-            if ($this->db->where('mov_id', $candidato)->count_all_results($this->tabla_ordenes) === 0) {
-                $mov_id = $candidato;
-                break;
-            }
-        }
-
+        $mov_id = $this->_generar_mov_id();
         if ($mov_id === FALSE) {
             $this->db->trans_complete();
             return FALSE;
@@ -373,6 +425,146 @@ class Buy_credits_model extends CI_Model
         }
 
         return $mov_id;
+    }
+
+    /**
+     * Creates a plan/lote order while the per-user advisory lock is held.
+     *
+     * @param  string $id_usuario
+     * @param  array  $plan
+     * @param  int    $rif_plan_id
+     * @param  int    $rif_num_id
+     * @param  int    $cantidad
+     * @param  string $periodo
+     * @param  float  $precio        Precio unitario
+     * @param  string $moneda
+     * @param  float  $total
+     * @param  int    $org_id
+     * @return string|false
+     */
+    private function _procesar_compra_plan_bloqueada(
+        $id_usuario,
+        array $plan,
+        $rif_plan_id,
+        $rif_num_id,
+        $cantidad,
+        $periodo,
+        $precio,
+        $moneda,
+        $total,
+        $org_id
+    ) {
+        if (!$this->db->table_exists('rif_plan_compras')) {
+            log_message('error', 'BuyCredits: rif_plan_compras is missing; cannot create a plan order.');
+            return FALSE;
+        }
+
+        $debug_previo = $this->db->db_debug;
+        $this->db->db_debug = FALSE;
+
+        try {
+            $this->db->trans_start();
+
+            if ($this->_tiene_orden_pendiente($id_usuario)) {
+                $this->db->trans_complete();
+                return FALSE;
+            }
+
+            $mov_id = $this->_generar_mov_id();
+            if ($mov_id === FALSE) {
+                $this->db->trans_complete();
+                return FALSE;
+            }
+
+            $now_date = date('Y-m-d');
+            $now_time = date('H:i:s');
+            $now      = date('Y-m-d H:i:s');
+
+            $data_orden = [
+                'mov_id'         => $mov_id,
+                'mov_idusuario'  => (string)$id_usuario,
+                'mov_idplan'     => (string)$plan['pla_id'],
+                'mov_nomplan'    => (string)$plan['pla_nombre'],
+                'mov_precioplan' => number_format($total, 2, '.', ''),
+                'mov_moneda'     => $moneda,
+                'mov_sms'        => (int)$cantidad,
+                'mov_status'     => 'A',
+                'mov_statuspag'  => 'NoPagado',
+                'mov_fechcomp'   => $now_date,
+                'mov_hora'       => $now_time,
+                'mov_pais'       => 'US',
+            ];
+            $insert_orden = $this->db->insert($this->tabla_ordenes, $data_orden);
+
+            $insert_compra = $this->db->insert('rif_plan_compras', [
+                'compra_mov_id'         => (string)$mov_id,
+                'compra_org_id'         => (int)$org_id,
+                'compra_plan_id'        => (int)$rif_plan_id,
+                'compra_num_id'         => (int)$rif_num_id,
+                // 0 = ilimitado: el lote no tiene cupo finito y su vigencia
+                // se calcula desde compra_periodo (mensual/anual).
+                'compra_cantidad'       => $rif_num_id > 0 ? (int)$cantidad : 0,
+                'compra_periodo'        => (string)$periodo,
+                'compra_precio_unitario' => number_format($precio, 2, '.', ''),
+                'compra_total'          => number_format($total, 2, '.', ''),
+                'compra_moneda'         => $moneda,
+                'compra_estado'         => 'pendiente',
+                'compra_created_at'     => $now,
+                'compra_updated_at'     => $now,
+            ]);
+
+            $completed = $this->db->trans_complete();
+
+            if (!$insert_orden || !$insert_compra || $completed === FALSE
+                || $this->db->trans_status() === FALSE) {
+                log_message('error', 'BuyCredits: unable to commit plan order ' . (string)$mov_id . '.');
+                return FALSE;
+            }
+
+            return $mov_id;
+        } catch (Throwable $e) {
+            $this->db->trans_rollback();
+            log_message('error', 'BuyCredits: plan order creation failed.');
+            return FALSE;
+        } finally {
+            $this->db->db_debug = $debug_previo;
+        }
+    }
+
+    /**
+     * Indica si el usuario tiene una orden pendiente de pago.
+     *
+     * @param  string $id_usuario
+     * @return bool
+     */
+    private function _tiene_orden_pendiente($id_usuario)
+    {
+        return (int)$this->db
+            ->where('mov_idusuario', (string)$id_usuario)
+            ->where_in('mov_status', ['A', 'V'])
+            ->where_in('mov_statuspag', ['NoPagado', 'waiting', 'in_process', 'in_process_partial'])
+            ->count_all_results($this->tabla_ordenes) > 0;
+    }
+
+    /**
+     * Genera un `mov_id` de 10 caracteres no predecible.
+     *
+     * @return string|false
+     */
+    private function _generar_mov_id()
+    {
+        for ($intento = 0; $intento < 10; $intento++) {
+            $conteo     = $this->db->count_all($this->tabla_ordenes);
+            $secuencial = str_pad((string)($conteo + 1), 7, '0', STR_PAD_LEFT);
+            $random     = str_pad((string)random_int(100, 999), 3, '0', STR_PAD_LEFT);
+            $candidato  = $secuencial . $random;
+
+            if ($this->db->where('mov_id', $candidato)->count_all_results($this->tabla_ordenes) === 0) {
+                return $candidato;
+            }
+        }
+
+        return FALSE;
     }
 
     /**
@@ -527,11 +719,11 @@ class Buy_credits_model extends CI_Model
     }
 
     /**
-     * Idempotently marks a Stripe order as approved and credits the user.
+     * Idempotently marks a Stripe order as approved.
      *
-     * The order transition is the idempotency guard. The approval and credit
-     * update commit together on InnoDB; if the credit fails or the process
-     * crashes before COMMIT, both writes roll back and Stripe can retry.
+     * - Orden de créditos: acredita `usu_credit`.
+     * - Orden de plan de rifa: crea el lote (`rif_plan_asignaciones`) en la
+     *   misma transacción. No exige créditos ni toca `usu_credit`.
      *
      * @param  array  $order
      * @param  string $session_id
@@ -543,11 +735,22 @@ class Buy_credits_model extends CI_Model
     {
         $sms_credits = (int)($order['mov_sms'] ?? 0);
         $id_usuario  = (string)($order['mov_idusuario'] ?? '');
+        $es_plan     = $this->_es_compra_plan((string)($order['mov_id'] ?? ''));
 
-        // Never approve a paid order when the credit balance cannot be
+        if ($id_usuario === '') {
+            log_message('error', 'Stripe: order ' . (string)($order['mov_id'] ?? '') . ' has no user.');
+            return FALSE;
+        }
+
+        if (!$es_plan && $this->_orden_es_plan($order)) {
+            log_message('error', 'Stripe: plan order ' . (string)$order['mov_id'] . ' has no rif_plan_compras row; settlement aborted.');
+            return FALSE;
+        }
+
+        // Never approve a paid credit order when the credit balance cannot be
         // increased. The webhook will retry so the payment can be reconciled.
-        if ($sms_credits <= 0 || $id_usuario === ''
-            || !$this->db->field_exists('usu_credit', 'cab_usuarios')) {
+        if (!$es_plan
+            && ($sms_credits <= 0 || !$this->db->field_exists('usu_credit', 'cab_usuarios'))) {
             log_message('error', 'Stripe: order ' . (string)$order['mov_id'] . ' cannot be credited because the user or usu_credit field is invalid.');
             return FALSE;
         }
@@ -588,35 +791,42 @@ class Buy_credits_model extends CI_Model
         $filas_actualizadas = (int)$this->db->affected_rows();
 
         if ($filas_actualizadas === 1) {
-            $this->db
-                ->set('usu_credit', 'COALESCE(usu_credit, 0) + ' . $sms_credits, FALSE)
-                ->where('usu_id', $id_usuario)
-                ->update('cab_usuarios');
-
-            if ($this->db->affected_rows() !== 1) {
-                log_message('error', 'Stripe: unable to credit user ' . $id_usuario . ' for order ' . (string)$order['mov_id'] . '.');
-
-                // Defensive compensation only for deployments where the InnoDB
-                // migration has not run. On InnoDB, trans_rollback() reverts
-                // both the approval and any manual compensation.
-                if (!$this->_liquidacion_es_innodb()) {
-                    $this->db
-                        ->where('mov_id', (string)$order['mov_id'])
-                        ->where('mov_stripe_session_id', (string)$session_id)
-                        ->where('mov_statuspag', 'approved')
-                        ->update($this->tabla_ordenes, [
-                            'mov_statuspag' => 'in_process',
-                            'mov_fechpago'  => NULL,
-                            'mov_horapag'   => NULL,
-                        ]);
-
-                    if ($this->db->affected_rows() !== 1) {
-                        log_message('error', 'Stripe: CRITICAL unable to revert order ' . (string)$order['mov_id'] . ' after a credit failure.');
-                    }
+            if ($es_plan) {
+                if (!$this->_crear_lote_plan((string)$order['mov_id'])) {
+                    $this->db->trans_rollback();
+                    return FALSE;
                 }
+            } else {
+                $this->db
+                    ->set('usu_credit', 'COALESCE(usu_credit, 0) + ' . $sms_credits, FALSE)
+                    ->where('usu_id', $id_usuario)
+                    ->update('cab_usuarios');
 
-                $this->db->trans_rollback();
-                return FALSE;
+                if ($this->db->affected_rows() !== 1) {
+                    log_message('error', 'Stripe: unable to credit user ' . $id_usuario . ' for order ' . (string)$order['mov_id'] . '.');
+
+                    // Defensive compensation only for deployments where the InnoDB
+                    // migration has not run. On InnoDB, trans_rollback() reverts
+                    // both the approval and any manual compensation.
+                    if (!$this->_liquidacion_es_innodb()) {
+                        $this->db
+                            ->where('mov_id', (string)$order['mov_id'])
+                            ->where('mov_stripe_session_id', (string)$session_id)
+                            ->where('mov_statuspag', 'approved')
+                            ->update($this->tabla_ordenes, [
+                                'mov_statuspag' => 'in_process',
+                                'mov_fechpago'  => NULL,
+                                'mov_horapag'   => NULL,
+                            ]);
+
+                        if ($this->db->affected_rows() !== 1) {
+                            log_message('error', 'Stripe: CRITICAL unable to revert order ' . (string)$order['mov_id'] . ' after a credit failure.');
+                        }
+                    }
+
+                    $this->db->trans_rollback();
+                    return FALSE;
+                }
             }
         }
 
@@ -661,24 +871,39 @@ class Buy_credits_model extends CI_Model
     }
 
     /**
-     * Idempotently marks a BTCPay order as approved and credits the user.
+     * Idempotently marks a BTCPay order as approved.
      *
-     * The order transition is the idempotency guard. If the subsequent credit
-     * update fails, the transaction rolls back. A defensive explicit revert is
-     * kept for pre-migration MyISAM deployments.
+     * - Orden de créditos: acredita `usu_credit`.
+     * - Orden de plan de rifa: crea el lote (`rif_plan_asignaciones`) en la
+     *   misma transacción. No exige créditos ni toca `usu_credit`.
+     *
+     * The order transition is the idempotency guard. If the subsequent write
+     * fails, the transaction rolls back. A defensive explicit revert is kept
+     * for pre-migration MyISAM deployments.
      *
      * @param  array  $order
      * @param  string $invoice_id
      * @param  string $coin
-     * @return int|false 1 = settled and credited, 0 = already processed, FALSE = DB error
+     * @return int|false 1 = settled, 0 = already processed, FALSE = DB error
      */
     public function liquidar_pago_aprobado(array $order, $invoice_id, $coin = 'BTC')
     {
         $sms_credits = (int)($order['mov_sms'] ?? 0);
         $id_usuario  = (string)($order['mov_idusuario'] ?? '');
+        $es_plan     = $this->_es_compra_plan((string)($order['mov_id'] ?? ''));
 
-        if ($sms_credits <= 0 || $id_usuario === ''
-            || !$this->db->field_exists('usu_credit', 'cab_usuarios')) {
+        if ($id_usuario === '') {
+            log_message('error', 'BTCPay: order ' . (string)($order['mov_id'] ?? '') . ' has no user.');
+            return FALSE;
+        }
+
+        if (!$es_plan && $this->_orden_es_plan($order)) {
+            log_message('error', 'BTCPay: plan order ' . (string)$order['mov_id'] . ' has no rif_plan_compras row; settlement aborted.');
+            return FALSE;
+        }
+
+        if (!$es_plan
+            && ($sms_credits <= 0 || !$this->db->field_exists('usu_credit', 'cab_usuarios'))) {
             log_message('error', 'BTCPay: order ' . (string)($order['mov_id'] ?? '') . ' cannot be credited because the user or usu_credit field is invalid.');
             return FALSE;
         }
@@ -716,38 +941,45 @@ class Buy_credits_model extends CI_Model
 
         $filas_actualizadas = (int)$this->db->affected_rows();
 
-        // 2. Credit the balance ONLY if this request won the status
+        // 2. Apply the order's effect ONLY if this request won the status
         //    transition. This makes webhook retries and concurrent deliveries
-        //    idempotent and prevents double-crediting.
+        //    idempotent.
         if ($filas_actualizadas === 1) {
-            $this->db
-                ->set('usu_credit', 'COALESCE(usu_credit, 0) + ' . $sms_credits, FALSE)
-                ->where('usu_id', $id_usuario)
-                ->update('cab_usuarios');
-
-            if ($this->db->affected_rows() !== 1) {
-                log_message('error', 'BTCPay: unable to credit user ' . $id_usuario . ' for order ' . (string)$order['mov_id'] . '.');
-
-                // Defensive compensation only for pre-migration MyISAM data;
-                // on InnoDB the transaction rollback below reverts the approval.
-                if (!$this->_liquidacion_es_innodb()) {
-                    $this->db
-                        ->where('mov_id', (string)$order['mov_id'])
-                        ->where('mov_idpago', (string)$invoice_id)
-                        ->where('mov_statuspag', 'approved')
-                        ->update($this->tabla_ordenes, [
-                            'mov_statuspag' => 'in_process',
-                            'mov_fechpago'  => NULL,
-                            'mov_horapag'   => NULL,
-                        ]);
-
-                    if ($this->db->affected_rows() !== 1) {
-                        log_message('error', 'BTCPay: CRITICAL unable to revert order ' . (string)$order['mov_id'] . ' after a credit failure.');
-                    }
+            if ($es_plan) {
+                if (!$this->_crear_lote_plan((string)$order['mov_id'])) {
+                    $this->db->trans_rollback();
+                    return FALSE;
                 }
+            } else {
+                $this->db
+                    ->set('usu_credit', 'COALESCE(usu_credit, 0) + ' . $sms_credits, FALSE)
+                    ->where('usu_id', $id_usuario)
+                    ->update('cab_usuarios');
 
-                $this->db->trans_rollback();
-                return FALSE;
+                if ($this->db->affected_rows() !== 1) {
+                    log_message('error', 'BTCPay: unable to credit user ' . $id_usuario . ' for order ' . (string)$order['mov_id'] . '.');
+
+                    // Defensive compensation only for pre-migration MyISAM data;
+                    // on InnoDB the transaction rollback below reverts the approval.
+                    if (!$this->_liquidacion_es_innodb()) {
+                        $this->db
+                            ->where('mov_id', (string)$order['mov_id'])
+                            ->where('mov_idpago', (string)$invoice_id)
+                            ->where('mov_statuspag', 'approved')
+                            ->update($this->tabla_ordenes, [
+                                'mov_statuspag' => 'in_process',
+                                'mov_fechpago'  => NULL,
+                                'mov_horapag'   => NULL,
+                            ]);
+
+                        if ($this->db->affected_rows() !== 1) {
+                            log_message('error', 'BTCPay: CRITICAL unable to revert order ' . (string)$order['mov_id'] . ' after a credit failure.');
+                        }
+                    }
+
+                    $this->db->trans_rollback();
+                    return FALSE;
+                }
             }
         }
 
@@ -857,12 +1089,17 @@ class Buy_credits_model extends CI_Model
     /**
      * Cancels an unpaid order.
      *
+     * Si la orden corresponde a un plan de rifa, marca también la compra como
+     * cancelada cuando todavía no generó lote.
+     *
      * @param  string $mov_id
      * @param  string $id_usuario
      * @return bool
      */
     public function cancelar_orden($mov_id, $id_usuario)
     {
+        $this->db->trans_start();
+
         $ok = $this->db
             ->where('mov_id', (string)$mov_id)
             ->where('mov_idusuario', (string)$id_usuario)
@@ -872,7 +1109,81 @@ class Buy_credits_model extends CI_Model
                 'mov_statuspag' => 'cancelled',
             ]);
 
-        return $ok && $this->db->affected_rows() === 1;
+        if (!$ok || $this->db->affected_rows() !== 1) {
+            $this->db->trans_rollback();
+            return FALSE;
+        }
+
+        if ($this->_es_compra_plan((string)$mov_id)) {
+            if (!$this->Plan_compra_model->marcar_cancelada((string)$mov_id)) {
+                log_message('error', 'BuyCredits: order ' . (string)$mov_id . ' cancelled but rif_plan_compras could not be marked.');
+                $this->db->trans_rollback();
+                return FALSE;
+            }
+        }
+
+        $completed = $this->db->trans_complete();
+
+        return $completed !== FALSE && $this->db->trans_status() !== FALSE;
+    }
+
+    /**
+     * Indica si una orden tiene una compra de plan de rifa asociada.
+     *
+     * @param  string $mov_id
+     * @return bool
+     */
+    private function _es_compra_plan($mov_id)
+    {
+        if (!$this->db->table_exists('rif_plan_compras')) {
+            return FALSE;
+        }
+
+        return (int)$this->db
+            ->where('compra_mov_id', (string)$mov_id)
+            ->count_all_results('rif_plan_compras') > 0;
+    }
+
+    /**
+     * Respaldo de tipo para no degradar una orden de plan a créditos si falta
+     * su fila en rif_plan_compras. La oferta se conserva con borrado lógico.
+     *
+     * @param  array $order
+     * @return bool
+     */
+    private function _orden_es_plan(array $order)
+    {
+        $plan_id = trim((string)($order['mov_idplan'] ?? ''));
+        if ($plan_id === '') {
+            return FALSE;
+        }
+
+        $plan = $this->db
+            ->select('pla_tipo')
+            ->where('pla_id', $plan_id)
+            ->limit(1)
+            ->get($this->tabla_planes)
+            ->row_array();
+
+        return !empty($plan) && (string)($plan['pla_tipo'] ?? '') === 'plan_rifa';
+    }
+
+    /**
+     * Crea el lote de plan dentro de la transacción de settlement.
+     *
+     * @param  string $mov_id
+     * @return bool
+     */
+    private function _crear_lote_plan($mov_id)
+    {
+        $resultado = $this->Plan_compra_model->crear_lote_para_orden((string)$mov_id);
+
+        if (!is_array($resultado) || empty($resultado['ok']) || !empty($resultado['no_plan'])) {
+            log_message('error', 'BuyCredits: unable to create the plan assignment for order ' . (string)$mov_id . '.');
+            return FALSE;
+        }
+
+        return TRUE;
     }
 }
 
