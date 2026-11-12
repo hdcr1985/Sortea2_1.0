@@ -48,11 +48,9 @@ class MisRifas extends MY_Controller
 
         $this->page_styles = [
             'assets/plugins/custom/datatables/datatables.bundle.css',
-            'assets/plugins/custom/ckeditor/ckeditor-classic.bundle.css',
         ];
         $this->page_vendor_scripts = [
             'assets/plugins/custom/datatables/datatables.bundle.js',
-            'assets/plugins/custom/ckeditor/ckeditor-classic.bundle.js',
         ];
     }
 
@@ -466,10 +464,11 @@ class MisRifas extends MY_Controller
             $errores_metodos = $this->_validar_metodos_rifa($metodos_ids, $org_id);
 
             if (empty($errores_metodos)
-                && (string)$rifa['rifa_tipo'] === 'paga'
+                && in_array((string)$rifa['rifa_tipo'], ['paga', 'gratuita'], TRUE)
+                && (float)($data['rifa_precio'] ?? 0) > 0
                 && in_array($estado_actual, ['activa', 'pausada'], TRUE)
                 && empty($metodos_ids)) {
-                $errores_metodos['rifa_metodos'] = 'Una rifa paga activa o pausada debe conservar al menos un método de pago.';
+                $errores_metodos['rifa_metodos'] = 'Una rifa activa o pausada con precio debe conservar al menos un método de pago.';
             }
 
             if (!empty($errores_metodos)) {
@@ -799,7 +798,7 @@ class MisRifas extends MY_Controller
             return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
         }
 
-        if ((string)$rifa['rifa_tipo'] === 'paga'
+        if ((float)($rifa['rifa_precio'] ?? 0) > 0
             && $this->Org_metodo_model->contar_rifa_activos_completos((int)$id) <= 0) {
             return $this->json([
                 'ok'     => FALSE,
@@ -909,7 +908,7 @@ class MisRifas extends MY_Controller
             return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
         }
 
-        if ((string)$rifa['rifa_tipo'] === 'paga'
+        if ((float)($rifa['rifa_precio'] ?? 0) > 0
             && $this->Org_metodo_model->contar_rifa_activos_completos((int)$id) <= 0) {
             return $this->json([
                 'ok'     => FALSE,
@@ -1814,7 +1813,7 @@ class MisRifas extends MY_Controller
         $raw_precio = str_replace(',', '.', trim($this->_post_escalar('rifa_precio')));
         $precio     = 0.00;
 
-        if ($tipo !== 'gratuita' && $raw_precio !== '' && is_numeric($raw_precio)) {
+        if ($raw_precio !== '' && is_numeric($raw_precio)) {
             $precio_float = (float)$raw_precio;
             if (is_finite($precio_float)) {
                 $precio = round($precio_float, 2);
@@ -1950,14 +1949,13 @@ class MisRifas extends MY_Controller
         } else {
             $precio = (float)($data['rifa_precio'] ?? 0);
 
-            if ($tipo === 'paga') {
-                if ($precio <= 0) {
-                    $errores['rifa_precio'] = 'El precio debe ser mayor que cero para una rifa paga.';
-                } elseif ($precio > 9999999999.99) {
-                    $errores['rifa_precio'] = 'El precio excede el máximo permitido.';
-                }
-            } elseif ($precio !== 0.0) {
-                $errores['rifa_precio'] = 'Una rifa gratuita debe tener precio cero.';
+            // El tipo "gratuita" se refiere a la publicación (sin consumir
+            // plan y sujeta a aprobación), no al precio del ticket. Toda rifa
+            // debe definir un precio de ticket mayor que cero.
+            if ($precio <= 0) {
+                $errores['rifa_precio'] = 'El precio del ticket debe ser mayor que cero.';
+            } elseif ($precio > 9999999999.99) {
+                $errores['rifa_precio'] = 'El precio excede el máximo permitido.';
             }
         }
 
@@ -2199,7 +2197,7 @@ class MisRifas extends MY_Controller
             'rifa_descripcion'     => $descripcion !== '' ? $descripcion : NULL,
             'rifa_condiciones'     => $data['rifa_condiciones'] !== '' ? (string)$data['rifa_condiciones'] : NULL,
             'rifa_tipo'            => $tipo,
-            'rifa_precio'          => $tipo === 'gratuita' ? 0.00 : round((float)$data['rifa_precio'], 2),
+            'rifa_precio'          => round((float)$data['rifa_precio'], 2),
             'rifa_moneda'          => (string)$data['rifa_moneda'],
             'rifa_asig_id'         => (int)($data['rifa_asig_id'] ?? 0) > 0 ? (int)($data['rifa_asig_id'] ?? 0) : NULL,
             'rifa_num_id'          => (int)($data['rifa_num_id'] ?? 0) > 0 ? (int)($data['rifa_num_id'] ?? 0) : NULL,
@@ -2620,15 +2618,14 @@ class MisRifas extends MY_Controller
      */
     private function _tipo_html(array $rifa)
     {
-        if ((string)($rifa['rifa_tipo'] ?? 'paga') === 'gratuita') {
-            return '<span class="badge badge-light-success fw-bold px-3 py-2">Gratuita</span>';
-        }
-
-        $moneda = htmlspecialchars((string)($rifa['rifa_moneda'] ?? 'USD'), ENT_QUOTES, 'UTF-8');
-        $precio = number_format((float)($rifa['rifa_precio'] ?? 0), 2, '.', ',');
+        $es_gratuita = (string)($rifa['rifa_tipo'] ?? 'paga') === 'gratuita';
+        $moneda      = htmlspecialchars((string)($rifa['rifa_moneda'] ?? 'USD'), ENT_QUOTES, 'UTF-8');
+        $precio      = number_format((float)($rifa['rifa_precio'] ?? 0), 2, '.', ',');
+        $badge       = $es_gratuita ? 'badge-light-success' : 'badge-light-primary';
+        $label       = $es_gratuita ? 'Gratuita' : 'Paga';
 
         return '<div class="d-flex flex-column">'
-            . '<span class="badge badge-light-primary fw-bold px-3 py-2 align-self-start">Paga</span>'
+            . '<span class="badge ' . $badge . ' fw-bold px-3 py-2 align-self-start">' . $label . '</span>'
             . '<span class="text-muted fs-8 mt-1">' . $precio . ' ' . $moneda . '</span>'
             . '</div>';
     }
@@ -2770,7 +2767,7 @@ class MisRifas extends MY_Controller
             'estado_invalido'      => 'La rifa no se encuentra en un estado compatible con esta acción.',
             'fecha_sorteo'         => 'Debes definir una fecha de sorteo futura antes de publicar.',
             'numeracion_invalida'  => 'La numeración de la rifa no es válida. Revísala antes de publicar.',
-            'precio_invalido'      => 'Una rifa paga debe tener un precio mayor que cero.',
+            'precio_invalido'      => 'La rifa debe tener un precio de ticket mayor que cero.',
             'titulo_invalido'      => 'El título de la rifa no es válido.',
             'sin_portada'          => 'Debes subir una imagen de portada antes de publicar la rifa.',
             'sin_metodos_pago'     => 'Selecciona al menos un método de pago activo y completo antes de publicar la rifa.',

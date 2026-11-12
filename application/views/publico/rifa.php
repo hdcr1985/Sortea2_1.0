@@ -7,7 +7,6 @@ $moneda        = (string)($rifa['rifa_moneda'] ?? 'USD');
 $total         = (int)($rifa['rifa_total_numeros'] ?? 0);
 $disponibles   = (int)($resumen['disponibles'] ?? 0);
 $modo          = (string)($rifa['rifa_modo_asignacion'] ?? 'manual');
-$es_gratuita   = (string)($rifa['rifa_tipo'] ?? 'paga') === 'gratuita';
 $max_compra    = max(1, (int)($rifa['rifa_max_por_compra'] ?? 1));
 $mostrar_res   = (int)($rifa['rifa_mostrar_reservados'] ?? 1);
 $fecha_sorteo  = !empty($rifa['rifa_fecha_sorteo']) ? date('d/m/Y H:i', strtotime($rifa['rifa_fecha_sorteo'])) : 'Por definir';
@@ -106,9 +105,9 @@ $imagenes      = isset($imagenes) && is_array($imagenes) ? $imagenes : [];
                             </div>
                         </div>
 
-                        <?php if ($es_gratuita): ?>
+                        <?php if ($precio <= 0): ?>
                             <div class="alert bg-light-info border border-info border-dashed mb-0">
-                                <div class="text-gray-700 fs-7">Las rifas gratuitas se habilitarán en una próxima fase.</div>
+                                <div class="text-gray-700 fs-7">Esta rifa no tiene un precio de ticket disponible.</div>
                             </div>
                         <?php elseif (empty($metodos)): ?>
                             <div class="alert bg-light-warning border border-warning border-dashed mb-0">

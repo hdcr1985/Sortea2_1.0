@@ -19,9 +19,9 @@
  * anterior queda solo como hidden de compatibilidad; el backend deriva el
  * rango desde el lote o desde la numeración activa seleccionada.
  *
- * M03.2: la descripción se edita con CKEditor 5 (con fallback a textarea) y
- * la galería acepta hasta 3 imágenes (1 portada + 2 adicionales). En estados
- * finalizada/cancelada la galería es de solo lectura.
+ * M03.2: la descripción se edita en un textarea y la galería acepta hasta 3
+ * imágenes (1 portada + 2 adicionales). En estados finalizada/cancelada la
+ * galería es de solo lectura.
  *
  * Claves DataTables:
  * - rifa, tipo, numeracion, estado, sorteo, acciones.
@@ -37,82 +37,6 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
 ?>
 
 <style>
-/* M03.2 - CKEditor 5 dentro del modal de rifas */
-:root {
-    --ck-z-default: 2000 !important;
-    --ck-z-panel: 3000 !important;
-    --ck-z-dialog: 10000 !important;
-}
-
-.ck-body-wrapper {
-    z-index: 10055 !important;
-    position: relative;
-}
-
-.ck.ck-editor {
-    width: 100% !important;
-}
-
-.ck-editor__editable_inline {
-    min-height: 180px !important;
-    max-height: 320px !important;
-    overflow-y: auto !important;
-    font-size: 14px !important;
-    line-height: 1.6 !important;
-}
-
-/* Compatibilidad bi-tema: se consumen variables CSS de Bootstrap/Metronic. */
-.ck.ck-toolbar {
-    background: var(--bs-tertiary-bg);
-    border-color: var(--bs-border-color);
-}
-
-.ck.ck-toolbar .ck-button {
-    color: var(--bs-body-color);
-}
-
-.ck.ck-toolbar .ck-button:hover,
-.ck.ck-toolbar .ck-button.ck-on {
-    background: var(--bs-secondary-bg);
-    color: var(--bs-emphasis-color);
-}
-
-.ck.ck-editor__editable:not(.ck-editor__nested-editable) {
-    background: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    border-color: var(--bs-border-color);
-}
-
-.ck.ck-dropdown__panel,
-.ck.ck-list {
-    background: var(--bs-body-bg);
-    border-color: var(--bs-border-color);
-}
-
-.ck.ck-list__item .ck-button {
-    color: var(--bs-body-color);
-    background: transparent;
-}
-
-.ck.ck-list__item .ck-button:hover {
-    background: var(--bs-secondary-bg);
-}
-
-.ck.ck-input {
-    background: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    border-color: var(--bs-border-color);
-}
-
-.ck.ck-labeled-field-view__status {
-    color: var(--bs-secondary-color);
-}
-
-.ck-content img {
-    max-width: 100%;
-    height: auto;
-}
-
 #galeria_preview .ratio img,
 #galeria_existentes .ratio img {
     object-fit: cover;
@@ -657,23 +581,11 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                             <textarea name="rifa_descripcion"
                                 id="rifa_descripcion"
                                 class="form-control form-control-solid"
-                                rows="3"
-                                maxlength="5000"
+                                rows="5"
+                                maxlength="20000"
                                 placeholder="Describe el premio o la dinámica de la rifa"></textarea>
                             <div class="invalid-feedback" data-error-for="rifa_descripcion"></div>
-                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
-                                <div class="text-muted fs-8">Máximo 5000 caracteres. Puedes dar formato e insertar imágenes externas por URL.</div>
-                                <button type="button"
-                                    class="btn btn-sm btn-light-primary fw-semibold d-none"
-                                    id="btn_imagen_externa_rifa"
-                                    title="Insertar una imagen externa en la descripción"
-                                    aria-label="Insertar una imagen externa en la descripción">
-                                    <i class="ki-duotone ki-picture fs-4 me-1">
-                                        <span class="path1"></span><span class="path2"></span><span class="path3"></span>
-                                    </i>
-                                    Insertar imagen por URL
-                                </button>
-                            </div>
+                            <div class="text-muted fs-8 mt-1">Máximo 20000 caracteres.</div>
                         </div>
                         <!--end::Descripción-->
 
@@ -698,9 +610,10 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                             <label class="form-label required fw-semibold fs-7 text-gray-800" for="rifa_tipo">Tipo de rifa</label>
                             <select name="rifa_tipo" id="rifa_tipo" class="form-select form-select-solid" required>
                                 <option value="paga" selected>Paga</option>
-                                <option value="gratuita">Gratuita</option>
+                                <option value="gratuita">Gratuita (publicación gratis)</option>
                             </select>
                             <div class="invalid-feedback" data-error-for="rifa_tipo"></div>
+                            <div class="text-muted fs-8 mt-1">Gratuita: no consume plan y queda sujeta a aprobación. El precio del ticket se define aparte.</div>
                         </div>
                         <!--end::Tipo-->
 
@@ -961,7 +874,8 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                                     <span class="path1"></span><span class="path2"></span><span class="path3"></span>
                                 </i>
                                 <div class="text-gray-700 fs-7">
-                                    Las rifas gratuitas no consumen un lote. El admin definirá la numeración al aprobar.
+                                    Las rifas gratuitas no consumen un lote: la publicación es gratuita y queda pendiente de aprobación del administrador.
+                                    Puedes definir el precio del ticket para recaudar fondos; el admin asignará la numeración al aprobar.
                                 </div>
                             </div>
                         </div>
@@ -1056,27 +970,6 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                             <div class="text-muted fs-8 mt-1">Opcional en borrador. Debe ser futura para publicar.</div>
                         </div>
                         <!--end::Fecha de sorteo-->
-
-                        <!--begin::Imagen-->
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold fs-7 text-gray-800" for="rifa_imagen">Imagen de la rifa</label>
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="symbol symbol-60px flex-shrink-0" id="rifa_imagen_preview_wrap">
-                                    <img id="rifa_imagen_preview" src="" alt="Imagen de la rifa" class="w-100 h-100 object-fit-cover d-none" />
-                                    <span class="symbol-label bg-light text-muted fs-8" id="rifa_imagen_placeholder">Sin imagen</span>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <input type="file"
-                                        name="rifa_imagen"
-                                        id="rifa_imagen"
-                                        class="form-control form-control-solid"
-                                        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
-                                    <div class="invalid-feedback d-block" data-error-for="rifa_imagen"></div>
-                                    <div class="text-muted fs-8 mt-1">JPG, PNG o WEBP. Máximo 4 MB.</div>
-                                </div>
-                            </div>
-                        </div>
-                        <!--end::Imagen-->
 
                         <!--begin::Galería de imágenes (M03.2)-->
                         <div class="col-12" id="wrap_galeria_rifa">
@@ -1392,7 +1285,6 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
 document.addEventListener('DOMContentLoaded', function () {
     const BASE_URL = <?php echo json_encode(base_url($url_base . '/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     const LOGIN_EXPIRED = <?php echo json_encode(base_url('login?expired=1'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
-    const MEDIA_RIFA_BASE = <?php echo json_encode(base_url('media/rifa/'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 
     const jq = window.jQuery || null;
     const tieneDataTables = !!(jq && jq.fn && jq.fn.DataTable);
@@ -1425,13 +1317,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const alertErroresRifa = document.getElementById('alert_errores_rifa');
     const listaErroresRifa = document.getElementById('lista_errores_rifa');
     const avisoBloqueada = document.getElementById('aviso_rifa_bloqueada');
-    const imagenInput = document.getElementById('rifa_imagen');
-    const imagenPreview = document.getElementById('rifa_imagen_preview');
-    const imagenPlaceholder = document.getElementById('rifa_imagen_placeholder');
     const maxPorCompraInput = document.getElementById('rifa_max_por_compra');
 
     const descripcionTextarea = document.getElementById('rifa_descripcion');
-    const btnImagenExternaRifa = document.getElementById('btn_imagen_externa_rifa');
 
     const galeriaContadorEl = document.getElementById('galeria_contador');
     const galeriaModoCrearEl = document.getElementById('galeria_modo_crear');
@@ -1474,15 +1362,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let filtroTimer = null;
     let slugManual = false;
     let camposBloqueados = false;
-    let previewObjectUrl = null;
-    let imagenActualUrl = '';
     let accionEnCurso = false;
 
     const GALERIA_MAX = 3;
     const GALERIA_TIPOS = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     const GALERIA_MAX_BYTES = 4 * 1024 * 1024;
-    let ckEditorRifa = null;
-    let pendingDescripcionHtml = null;
     let galeriaRifaId = 0;
     let galeriaEditable = true;
     let galeriaImagenes = [];
@@ -1716,186 +1600,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ─────────────────────────────────────────────────────
-    // Descripción enriquecida (CKEditor 5)
+    // Descripción (textarea)
     // ─────────────────────────────────────────────────────
     function get_descripcion_html() {
-        if (ckEditorRifa) {
-            return ckEditorRifa.getData();
-        }
         return descripcionTextarea ? descripcionTextarea.value : '';
     }
 
     function set_descripcion_html(html) {
-        const contenido = String(html || '');
-
-        if (ckEditorRifa) {
-            ckEditorRifa.setData(contenido);
-            pendingDescripcionHtml = null;
-            return;
-        }
-
-        pendingDescripcionHtml = contenido;
         if (descripcionTextarea) {
-            descripcionTextarea.value = contenido;
+            descripcionTextarea.value = String(html || '');
         }
-    }
-
-    /*
-     * El bundle clásico incluido en Metronic no expone todos los plugins del
-     * build oficial. CKEditor filtra los ítems de toolbar no disponibles y
-     * conserva el resto, por lo que se declara el set solicitado sin romper la
-     * inicialización. El soporte de imagen externa se completa por código si
-     * el comando nativo insertImage no está registrado.
-     */
-    function configurar_imagen_externa_rifa(editor) {
-        try {
-            if (editor.commands.get('insertImage')) {
-                return;
-            }
-
-            const schema = editor.model.schema;
-            if (!schema.isRegistered('externalImage')) {
-                schema.register('externalImage', {
-                    isInline: true,
-                    isObject: true,
-                    allowWhere: '$text',
-                    allowAttributes: ['src', 'alt', 'title']
-                });
-            }
-
-            editor.conversion.for('upcast').elementToElement({
-                view: { name: 'img', attributes: true },
-                model: function (viewElement, conversionApi) {
-                    const src = viewElement.getAttribute('src');
-                    if (!src) {
-                        return null;
-                    }
-                    return conversionApi.writer.createElement('externalImage', {
-                        src: src,
-                        alt: viewElement.getAttribute('alt') || '',
-                        title: viewElement.getAttribute('title') || ''
-                    });
-                }
-            });
-
-            const crearImagen = function (modelElement, conversionApi) {
-                return conversionApi.writer.createEmptyElement('img', {
-                    src: modelElement.getAttribute('src') || '',
-                    alt: modelElement.getAttribute('alt') || '',
-                    title: modelElement.getAttribute('title') || ''
-                });
-            };
-
-            editor.conversion.for('dataDowncast').elementToElement({
-                model: 'externalImage',
-                view: crearImagen
-            });
-            editor.conversion.for('editingDowncast').elementToElement({
-                model: 'externalImage',
-                view: crearImagen
-            });
-
-            editor.__soporteImagenExterna = true;
-        } catch (error) {
-            console.error('No se pudo habilitar la imagen externa en CKEditor:', error);
-        }
-    }
-
-    function insertar_imagen_externa_rifa() {
-        if (!ckEditorRifa) {
-            return;
-        }
-
-        Swal.fire({
-            title: 'Insertar imagen por URL',
-            input: 'url',
-            inputLabel: 'URL de la imagen',
-            inputPlaceholder: 'https://ejemplo.com/imagen.jpg',
-            inputAttributes: {
-                'aria-label': 'URL de la imagen'
-            },
-            inputValidator: function (value) {
-                const url = String(value || '').trim();
-                if (!url) {
-                    return 'La URL es obligatoria.';
-                }
-                if (!/^https?:\/\//i.test(url)) {
-                    return 'Usa una URL válida que empiece por http:// o https://';
-                }
-                return null;
-            },
-            showCancelButton: true,
-            confirmButtonText: 'Insertar',
-            cancelButtonText: 'Cancelar',
-            buttonsStyling: false,
-            customClass: {
-                confirmButton: 'btn btn-sm btn-primary',
-                cancelButton: 'btn btn-sm btn-light ms-2'
-            }
-        }).then(function (result) {
-            if (!result.isConfirmed) {
-                return;
-            }
-
-            const url = String(result.value || '').trim();
-
-            try {
-                if (ckEditorRifa.commands.get('insertImage')) {
-                    ckEditorRifa.execute('insertImage', { source: url });
-                } else if (ckEditorRifa.__soporteImagenExterna) {
-                    ckEditorRifa.model.change(function (writer) {
-                        const imagen = writer.createElement('externalImage', { src: url });
-                        ckEditorRifa.model.insertContent(imagen, ckEditorRifa.model.document.selection);
-                    });
-                } else {
-                    mostrar_alerta('warning', 'El editor no pudo habilitar el soporte de imágenes externas.');
-                    return;
-                }
-
-                ckEditorRifa.editing.view.focus();
-            } catch (error) {
-                console.error('No se pudo insertar la imagen externa:', error);
-                mostrar_alerta('error', 'No se pudo insertar la imagen en la descripción.');
-            }
-        });
-    }
-
-    if (btnImagenExternaRifa) {
-        btnImagenExternaRifa.addEventListener('click', insertar_imagen_externa_rifa);
-    }
-
-    if (typeof ClassicEditor !== 'undefined' && descripcionTextarea) {
-        ClassicEditor.create(descripcionTextarea, {
-            toolbar: {
-                items: [
-                    'undo', 'redo', '|',
-                    'heading', '|',
-                    'bold', 'italic', 'underline', '|',
-                    'link', '|',
-                    'bulletedList', 'numberedList', '|',
-                    'blockQuote', 'insertTable', 'insertImage', '|',
-                    'removeFormat'
-                ],
-                shouldNotGroupWhenFull: true
-            },
-            table: {
-                contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells']
-            }
-        }).then(function (editor) {
-            ckEditorRifa = editor;
-            configurar_imagen_externa_rifa(editor);
-
-            if (btnImagenExternaRifa && !editor.commands.get('insertImage') && editor.__soporteImagenExterna) {
-                btnImagenExternaRifa.classList.remove('d-none');
-            }
-
-            if (pendingDescripcionHtml !== null) {
-                editor.setData(pendingDescripcionHtml);
-                pendingDescripcionHtml = null;
-            }
-        }).catch(function (error) {
-            console.error('Error initializing CKEditor in Mis Rifas:', error);
-        });
     }
 
     // ─────────────────────────────────────────────────────
@@ -2553,7 +2267,6 @@ document.addEventListener('DOMContentLoaded', function () {
             reserva_auto: 'rifa_reserva_auto',
             fecha_sorteo: 'rifa_fecha_sorteo',
             sorteo: 'rifa_fecha_sorteo',
-            imagen: 'rifa_imagen',
             imagenes: 'rifa_imagenes[]',
             rifa_imagenes: 'rifa_imagenes[]',
             portada: 'rifa_imagenes[]',
@@ -2597,89 +2310,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (total > 0 && alertEl) {
             alertEl.classList.remove('d-none');
         }
-    }
-
-    // ─────────────────────────────────────────────────────
-    // Imagen
-    // ─────────────────────────────────────────────────────
-    function limpiar_object_url() {
-        if (previewObjectUrl) {
-            try {
-                URL.revokeObjectURL(previewObjectUrl);
-            } catch (e) {}
-            previewObjectUrl = null;
-        }
-    }
-
-    function mostrar_preview(url) {
-        if (!imagenPreview || !imagenPlaceholder) {
-            return;
-        }
-
-        if (url) {
-            imagenPreview.src = url;
-            imagenPreview.classList.remove('d-none');
-            imagenPlaceholder.classList.add('d-none');
-        } else {
-            imagenPreview.removeAttribute('src');
-            imagenPreview.classList.add('d-none');
-            imagenPlaceholder.classList.remove('d-none');
-        }
-    }
-
-    if (imagenPreview) {
-        imagenPreview.addEventListener('error', function () {
-            imagenActualUrl = '';
-            mostrar_preview('');
-        });
-    }
-
-    function validar_imagen() {
-        if (!imagenInput || !imagenInput.files || !imagenInput.files.length) {
-            return true;
-        }
-
-        const archivo = imagenInput.files[0];
-        const tipos = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        const maxBytes = 4 * 1024 * 1024;
-
-        if (tipos.indexOf(String(archivo.type || '').toLowerCase()) === -1) {
-            mostrar_errores(formRifa, alertErroresRifa, listaErroresRifa, {
-                rifa_imagen: 'Formato no permitido. Usa JPG, PNG o WEBP.'
-            });
-            imagenInput.value = '';
-            mostrar_preview(imagenActualUrl);
-            return false;
-        }
-
-        if (archivo.size > maxBytes) {
-            mostrar_errores(formRifa, alertErroresRifa, listaErroresRifa, {
-                rifa_imagen: 'La imagen supera el máximo de 4 MB.'
-            });
-            imagenInput.value = '';
-            mostrar_preview(imagenActualUrl);
-            return false;
-        }
-
-        return true;
-    }
-
-    if (imagenInput) {
-        imagenInput.addEventListener('change', function () {
-            limpiar_object_url();
-
-            if (!this.files || !this.files.length) {
-                mostrar_preview(imagenActualUrl);
-                return;
-            }
-
-            if (!validar_imagen()) {
-                return;
-            }
-
-            previewObjectUrl = URL.createObjectURL(this.files[0]);
-            mostrar_preview(previewObjectUrl);
-        });
     }
 
     // ─────────────────────────────────────────────────────
@@ -3127,25 +2757,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const esGratuita = selectTipo && selectTipo.value === 'gratuita';
         const wrapMetodosPago = document.getElementById('wrap_rifa_metodos');
 
+        // El precio del ticket es independiente del tipo de publicación:
+        // una rifa gratuita puede recaudar fondos y debe poder cobrar.
         if (wrapMetodosPago) {
-            wrapMetodosPago.classList.toggle('d-none', esGratuita);
+            wrapMetodosPago.classList.remove('d-none');
         }
 
         if (wrapPrecio && inputPrecio && selectMoneda) {
-            if (esGratuita) {
-                wrapPrecio.classList.add('d-none');
-                inputPrecio.required = false;
-                inputPrecio.value = '0';
-                inputPrecio.disabled = true;
-                selectMoneda.disabled = true;
-            } else {
-                wrapPrecio.classList.remove('d-none');
-                inputPrecio.required = !camposBloqueados;
-                inputPrecio.disabled = camposBloqueados;
-                selectMoneda.disabled = camposBloqueados;
-                if (!inputPrecio.value || parseFloat(inputPrecio.value) < 0) {
-                    inputPrecio.value = '0.00';
-                }
+            wrapPrecio.classList.remove('d-none');
+            inputPrecio.required = !camposBloqueados;
+            inputPrecio.disabled = camposBloqueados;
+            selectMoneda.disabled = camposBloqueados;
+            if (!inputPrecio.value || parseFloat(inputPrecio.value) < 0) {
+                inputPrecio.value = '0.00';
             }
         }
 
@@ -3244,7 +2868,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // Modal: limpiar y cargar
     // ─────────────────────────────────────────────────────
     function limpiar_modal_rifa() {
-        limpiar_object_url();
         formRifa.reset();
 
         document.getElementById('rifa_id').value = '0';
@@ -3269,12 +2892,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         slugManual = false;
-        imagenActualUrl = '';
         set_descripcion_html('');
         limpiar_galeria();
         habilitar_campos_editables(true);
         aplicar_tipo_rifa();
-        mostrar_preview('');
         limpiar_errores(formRifa, alertErroresRifa, listaErroresRifa);
     }
 
@@ -3368,15 +2989,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             actualizar_estado_lote();
 
-            const imagenUrl = campo(d, ['imagen_url', 'rifa_imagen_url'], '');
-            const imagenArchivo = campo(d, ['rifa_imagen', 'imagen'], '');
-            const preview = imagenUrl
-                ? String(imagenUrl)
-                : (imagenArchivo ? MEDIA_RIFA_BASE + encodeURIComponent(String(rifaId)) : '');
-
-            imagenActualUrl = preview;
-            mostrar_preview(preview);
-
             // Galería M03.2: editable salvo en estados cerrados.
             const galeriaPermitida = (estado !== 'finalizada' && estado !== 'cancelada');
             configurar_modo_galeria('editar');
@@ -3406,10 +3018,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const tipo = document.getElementById('rifa_tipo').value;
-        if (tipo === 'paga' && !document.getElementById('rifa_precio').disabled) {
-            const precio = parseFloat(document.getElementById('rifa_precio').value);
+        const inputPrecioRifa = document.getElementById('rifa_precio');
+        if (inputPrecioRifa && !inputPrecioRifa.disabled) {
+            const precio = parseFloat(inputPrecioRifa.value);
             if (!isFinite(precio) || precio <= 0) {
-                errores.rifa_precio = 'El precio debe ser mayor que cero para una rifa paga.';
+                errores.rifa_precio = 'El precio del ticket debe ser mayor que cero.';
             }
         }
 
@@ -3494,12 +3107,6 @@ document.addEventListener('DOMContentLoaded', function () {
             fd.set('rifa_num_id', '0');
         }
 
-        if (tipo === 'gratuita') {
-            fd.set('rifa_precio', '0');
-            fd.set('rifa_moneda', document.getElementById('rifa_moneda').value || 'USD');
-            fd.delete('rifa_metodos[]');
-        }
-
         if (!camposBloqueados) {
             fd.set('rifa_reserva_auto', document.getElementById('rifa_reserva_auto').checked ? '1' : '0');
             fd.set('rifa_modo_asignacion', document.getElementById('rifa_modo_asignacion').value || 'manual');
@@ -3509,10 +3116,6 @@ document.addEventListener('DOMContentLoaded', function () {
             fd.set('rifa_numero_desde', document.getElementById('rifa_numero_desde').value || String(NUMERACION_FALLBACK.desde));
             fd.set('rifa_numero_hasta', document.getElementById('rifa_numero_hasta').value || String(NUMERACION_FALLBACK.hasta));
             fd.set('rifa_padding', document.getElementById('rifa_padding').value || String(NUMERACION_FALLBACK.padding));
-        }
-
-        if (!imagenInput.files || !imagenInput.files.length) {
-            fd.delete('rifa_imagen');
         }
 
         set_loading(btnGuardarRifa, true);
@@ -3577,16 +3180,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (modalRifaEl) {
-        modalRifaEl.addEventListener('shown.bs.modal', function () {
-            if (ckEditorRifa && ckEditorRifa.ui && typeof ckEditorRifa.ui.update === 'function') {
-                try {
-                    ckEditorRifa.ui.update();
-                } catch (e) {}
-            }
-        });
-
         modalRifaEl.addEventListener('hidden.bs.modal', function () {
-            limpiar_object_url();
             revocar_previews_galeria();
         });
     }

@@ -365,7 +365,7 @@ class Publico extends Publico_Controller
             'no_encontrada'       => [404, 'La rifa no existe.'],
             'no_activa'           => [422, 'La rifa no está activa.'],
             'rifa_cerrada'        => [422, 'La rifa ya cerró.'],
-            'solo_pagas'          => [422, 'Esta rifa no requiere compra.'],
+            'solo_pagas'          => [422, 'Esta rifa no tiene un precio de ticket disponible.'],
             'comprador_invalido'  => [422, 'Completa tu nombre y un correo válido.'],
             'metodo_invalido'     => [422, 'Selecciona un método de pago válido.'],
             'cantidad_invalida'   => [422, 'Indica una cantidad válida.'],

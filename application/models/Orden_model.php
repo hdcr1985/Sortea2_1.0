@@ -71,7 +71,10 @@ class Orden_model extends CI_Model
             return ['ok' => FALSE, 'motivo' => 'no_activa'];
         }
 
-        if ((string)$lectura['rifa_tipo'] !== 'paga') {
+        // "gratuita" describe la publicación (sin plan y con aprobación),
+        // no un ticket sin costo. Solo se bloquea si no hay precio de ticket.
+        if (!in_array((string)$lectura['rifa_tipo'], ['paga', 'gratuita'], TRUE)
+            || (float)$lectura['rifa_precio'] <= 0) {
             return ['ok' => FALSE, 'motivo' => 'solo_pagas'];
         }
 
@@ -134,7 +137,8 @@ class Orden_model extends CI_Model
                 return ['ok' => FALSE, 'motivo' => 'no_activa'];
             }
 
-            if ((string)$rifa['rifa_tipo'] !== 'paga') {
+            if (!in_array((string)$rifa['rifa_tipo'], ['paga', 'gratuita'], TRUE)
+                || (float)$rifa['rifa_precio'] <= 0) {
                 $this->db->trans_rollback();
                 return ['ok' => FALSE, 'motivo' => 'solo_pagas'];
             }
