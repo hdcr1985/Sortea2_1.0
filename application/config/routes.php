@@ -105,6 +105,12 @@ $route['mis-rifas/venta-presencial/(:num)']           = 'MisRifas/venta_presenci
 // Administración de rifas: resumen de tickets (M03.3)
 $route['rifas/tickets/(:num)']                        = 'Rifas/tickets/$1';
 
+// M09: moderación administrativa de rifas gratuitas y cancelaciones
+$route['rifas/aprobar-gratuita/(:num)']               = 'Rifas/aprobar_gratuita/$1';
+$route['rifas/rechazar-gratuita/(:num)']              = 'Rifas/rechazar_gratuita/$1';
+$route['rifas/aprobar-cancelacion/(:num)']            = 'Rifas/aprobar_cancelacion/$1';
+$route['rifas/rechazar-cancelacion/(:num)']           = 'Rifas/rechazar_cancelacion/$1';
+
 // ── M04 Monedas y tasas de cambio ─────────────────────────
 $route['monedas']                              = 'Monedas/index';
 $route['monedas/tabla']                        = 'Monedas/tabla';

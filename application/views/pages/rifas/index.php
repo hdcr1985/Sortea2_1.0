@@ -1,13 +1,15 @@
 <?php
 /**
  * M03 - Rifas: CRUD, numeración y estados.
- * Vista administrativa (solo lectura) del módulo Rifas.
+ * Vista administrativa con moderación M09 de rifas gratuitas y cancelaciones.
  *
  * Contrato de datos provisto por el controlador Rifas:
  * - $url_base string Raíz del módulo (por defecto "rifas").
  *
  * Endpoints consumidos (todos bajo $url_base):
  * - tabla (POST DataTables), datos/{id}.
+ * - aprobar-gratuita/{id}, rechazar-gratuita/{id}.
+ * - aprobar-cancelacion/{id}, rechazar-cancelacion/{id}.
  *
  * Claves DataTables:
  * - organizador, rifa, tipo, numeracion, estado, fechas, acciones.
@@ -21,12 +23,15 @@
  *   lectura; la portada se destaca visualmente.
  *
  * Acciones:
- * - Ver detalle (modal de solo lectura). M03 no expone mutaciones administrativas.
+ * - Ver detalle.
+ * - M09: aprobar/rechazar rifas gratuitas y aprobar/rechazar cancelaciones.
  */
 
 $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
     ? trim($url_base, '/')
     : 'rifas';
+
+$numeraciones = (isset($numeraciones) && is_array($numeraciones)) ? $numeraciones : [];
 ?>
 
 <style>
@@ -59,7 +64,7 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
         <div class="card-title">
             <div class="d-flex flex-column">
                 <h3 class="fw-bold text-gray-900 mb-1">Rifas</h3>
-                <span class="text-muted fs-7">Consulta las rifas de todos los organizadores y su estado actual.</span>
+                <span class="text-muted fs-7">Consulta las rifas de todos los organizadores, aprueba gratuitas y resuelve cancelaciones.</span>
             </div>
         </div>
         <div class="card-toolbar gap-3 flex-wrap">
@@ -351,6 +356,181 @@ $url_base = (isset($url_base) && is_string($url_base) && trim($url_base) !== '')
 </div>
 <!--end::Modal Imagen Rifa-->
 
+<!--begin::Modal Aprobar Rifa Gratuita-->
+<div class="modal fade" id="modal_aprobar_gratuita" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="symbol symbol-35px symbol-circle bg-light-success">
+                        <i class="ki-duotone ki-check-circle fs-3 text-success"><span class="path1"></span><span class="path2"></span></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h4 class="modal-title fw-bold text-gray-900">Aprobar rifa gratuita</h4>
+                        <span class="text-muted fs-8" id="aprobar_gratuita_titulo">-</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal" aria-label="Cerrar">
+                    <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="aprobar_gratuita_id" value="0" />
+                <div class="mb-5">
+                    <label class="form-label required fw-semibold fs-7 text-gray-800" for="aprobar_gratuita_num_id">Numeración</label>
+                    <select id="aprobar_gratuita_num_id" class="form-select form-select-solid" required>
+                        <option value="">Selecciona una numeración...</option>
+                        <?php foreach ($numeraciones as $numeracion): ?>
+                            <?php
+                            $num_id    = (int)($numeracion['num_id'] ?? 0);
+                            $num_label = (string)($numeracion['num_label'] ?? '');
+                            ?>
+                            <?php if ($num_id > 0 && (int)($numeracion['num_status'] ?? 0) === 1): ?>
+                                <option value="<?php echo $num_id; ?>">
+                                    <?php echo htmlspecialchars($num_label, ENT_QUOTES, 'UTF-8'); ?>
+                                </option>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="invalid-feedback d-block" id="aprobar_gratuita_error"></div>
+                    <div class="text-muted fs-8 mt-2">La numeración se asigna al aprobar y no puede cambiarse después de publicar.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-success fw-semibold" id="btn_confirmar_aprobar_gratuita">
+                    <i class="ki-duotone ki-check fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                    Aprobar y publicar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Modal Aprobar Rifa Gratuita-->
+
+<!--begin::Modal Rechazar Rifa Gratuita-->
+<div class="modal fade" id="modal_rechazar_gratuita" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="symbol symbol-35px symbol-circle bg-light-danger">
+                        <i class="ki-duotone ki-cross-circle fs-3 text-danger"><span class="path1"></span><span class="path2"></span></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h4 class="modal-title fw-bold text-gray-900">Rechazar rifa gratuita</h4>
+                        <span class="text-muted fs-8" id="rechazar_gratuita_titulo">-</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal" aria-label="Cerrar">
+                    <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rechazar_gratuita_id" value="0" />
+                <label class="form-label required fw-semibold fs-7 text-gray-800" for="rechazar_gratuita_motivo">Motivo del rechazo</label>
+                <textarea id="rechazar_gratuita_motivo" class="form-control form-control-solid" rows="4" maxlength="255" placeholder="Explica al organizador por qué se rechaza la rifa."></textarea>
+                <div class="invalid-feedback d-block" id="rechazar_gratuita_error"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-danger fw-semibold" id="btn_confirmar_rechazar_gratuita">
+                    <i class="ki-duotone ki-cross fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                    Rechazar rifa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Modal Rechazar Rifa Gratuita-->
+
+<!--begin::Modal Aprobar Cancelación-->
+<div class="modal fade" id="modal_aprobar_cancelacion" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="symbol symbol-35px symbol-circle bg-light-danger">
+                        <i class="ki-duotone ki-cross-circle fs-3 text-danger"><span class="path1"></span><span class="path2"></span></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h4 class="modal-title fw-bold text-gray-900">Aprobar cancelación</h4>
+                        <span class="text-muted fs-8" id="aprobar_cancelacion_titulo">-</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal" aria-label="Cerrar">
+                    <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="aprobar_cancelacion_id" value="0" />
+                <div class="alert alert-warning d-flex gap-2 mb-5">
+                    <i class="ki-duotone ki-information-5 fs-2 text-warning"><span class="path1"></span><span class="path2"></span><span class="path3"></span></i>
+                    <div class="text-gray-700 fs-7">
+                        La rifa pasará a <strong>cancelada</strong> y se devolverá el cupo consumido al plan del organizador.
+                        Si tiene números vendidos u órdenes pagadas, el sistema bloqueará la cancelación hasta gestionar los reembolsos.
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Motivo indicado por el organizador</div>
+                    <div class="fw-semibold text-gray-800 fs-7 text-break" id="aprobar_cancelacion_motivo_org">-</div>
+                </div>
+                <label class="form-label fw-semibold fs-7 text-gray-800" for="aprobar_cancelacion_motivo">Nota administrativa (opcional)</label>
+                <textarea id="aprobar_cancelacion_motivo" class="form-control form-control-solid" rows="3" maxlength="255" placeholder="Nota interna para la bitácora."></textarea>
+                <div class="invalid-feedback d-block" id="aprobar_cancelacion_error"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-danger fw-semibold" id="btn_confirmar_aprobar_cancelacion">
+                    <i class="ki-duotone ki-check fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                    Aprobar cancelación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Modal Aprobar Cancelación-->
+
+<!--begin::Modal Rechazar Cancelación-->
+<div class="modal fade" id="modal_rechazar_cancelacion" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="symbol symbol-35px symbol-circle bg-light-warning">
+                        <i class="ki-duotone ki-arrow-circle-left fs-3 text-warning"><span class="path1"></span><span class="path2"></span></i>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <h4 class="modal-title fw-bold text-gray-900">Rechazar cancelación</h4>
+                        <span class="text-muted fs-8" id="rechazar_cancelacion_titulo">-</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-icon btn-active-color-primary" data-bs-dismiss="modal" aria-label="Cerrar">
+                    <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="rechazar_cancelacion_id" value="0" />
+                <div class="mb-4">
+                    <div class="text-muted fs-8 text-uppercase fw-bold mb-1">Motivo indicado por el organizador</div>
+                    <div class="fw-semibold text-gray-800 fs-7 text-break" id="rechazar_cancelacion_motivo_org">-</div>
+                </div>
+                <label class="form-label required fw-semibold fs-7 text-gray-800" for="rechazar_cancelacion_motivo">Motivo del rechazo</label>
+                <textarea id="rechazar_cancelacion_motivo" class="form-control form-control-solid" rows="4" maxlength="255" placeholder="Explica por qué la rifa continúa activa."></textarea>
+                <div class="invalid-feedback d-block" id="rechazar_cancelacion_error"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-warning fw-semibold" id="btn_confirmar_rechazar_cancelacion">
+                    <i class="ki-duotone ki-arrow-circle-left fs-4 me-1"><span class="path1"></span><span class="path2"></span></i>
+                    Mantener rifa activa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<!--end::Modal Rechazar Cancelación-->
+
 <!--begin::JavaScript-->
 <script>
     // Ampliar miniatura de rifa en un modal
@@ -383,6 +563,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const modalDetalleEl = document.getElementById('modal_detalle_rifa');
     const modalDetalle = new bootstrap.Modal(modalDetalleEl);
+    const modalAprobarGratuita = new bootstrap.Modal(document.getElementById('modal_aprobar_gratuita'));
+    const modalRechazarGratuita = new bootstrap.Modal(document.getElementById('modal_rechazar_gratuita'));
+    const modalAprobarCancelacion = new bootstrap.Modal(document.getElementById('modal_aprobar_cancelacion'));
+    const modalRechazarCancelacion = new bootstrap.Modal(document.getElementById('modal_rechazar_cancelacion'));
 
     const btnRecargar = document.getElementById('btn_recargar_rifas');
     const inputFiltro = document.getElementById('filtro_rifas');
@@ -738,12 +922,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /*
-     * M03 administrativo es de solo lectura. Se normaliza la columna de
-     * acciones al estándar visual del proyecto: un único botón "Ver detalle"
-     * en color primary. El id se obtiene de la fila o del HTML del backend.
+     * M09: la columna de acciones puede incluir aprobar/rechazar además de
+     * ver detalle. Se conserva el HTML del backend cuando ya trae botones;
+     * el fallback mantiene el botón de detalle para respuestas antiguas.
      */
     function render_acciones_rifa(data, type, row) {
         if (type !== 'display') {
+            return data;
+        }
+
+        if (typeof data === 'string' && data.indexOf('btn-') !== -1) {
             return data;
         }
 
@@ -932,9 +1120,8 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('det_titulo').textContent = campo(d, ['rifa_titulo', 'titulo'], '—');
             document.getElementById('det_slug').textContent = campo(d, ['rifa_slug', 'slug'], '—');
 
-            document.getElementById('det_tipo_precio').textContent = (tipo === 'gratuita')
-                ? 'Gratuita'
-                : ('Paga · ' + formatear_moneda(precio, moneda));
+            document.getElementById('det_tipo_precio').textContent = ((tipo === 'gratuita') ? 'Gratuita' : 'Paga')
+                + ' · ' + formatear_moneda(precio, moneda);
 
             document.getElementById('det_numeracion').textContent = resumen_numeracion(d);
             document.getElementById('det_estado').innerHTML = badge_estado(estado);
@@ -989,23 +1176,244 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function limpiar_error_moderacion(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = '';
+        }
+    }
+
+    function post_moderacion(url, datos, btn, errorId, onSuccess) {
+        limpiar_error_moderacion(errorId);
+        set_loading(btn, true);
+
+        const fd = new FormData();
+        Object.keys(datos).forEach(function (key) {
+            fd.append(key, datos[key]);
+        });
+
+        request_json(url, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd
+        }).then(function (res) {
+            set_loading(btn, false);
+
+            if (res.status === 401) {
+                redirigir_login();
+                return;
+            }
+
+            if (res.data && res.data.ok === true) {
+                if (typeof onSuccess === 'function') {
+                    onSuccess(res.data);
+                }
+                return;
+            }
+
+            const msg = (res.data && res.data.msg)
+                || primer_error(res.data && res.data.errores)
+                || 'No se pudo completar la acción.';
+            const errorEl = document.getElementById(errorId);
+            if (errorEl) {
+                errorEl.textContent = msg;
+            }
+            mostrar_alerta('error', msg);
+        }).catch(function () {
+            set_loading(btn, false);
+            const errorEl = document.getElementById(errorId);
+            if (errorEl) {
+                errorEl.textContent = 'Error de conexión. Inténtalo de nuevo.';
+            }
+            mostrar_alerta('error', 'Error de conexión. Inténtalo de nuevo.');
+        });
+    }
+
+    function abrir_aprobar_gratuita(fila, btn) {
+        const id = (fila && fila.rifa_id) || (btn && btn.dataset.id) || '';
+        const titulo = (fila && fila.rifa_titulo) || (btn && btn.dataset.titulo) || '';
+
+        document.getElementById('aprobar_gratuita_id').value = id;
+        document.getElementById('aprobar_gratuita_titulo').textContent = titulo || 'Rifa gratuita';
+        document.getElementById('aprobar_gratuita_num_id').value = '';
+        limpiar_error_moderacion('aprobar_gratuita_error');
+
+        const select = document.getElementById('aprobar_gratuita_num_id');
+        if (!select || select.options.length <= 1) {
+            document.getElementById('aprobar_gratuita_error').textContent = 'No hay numeraciones activas. Configura una en Planes de Rifa.';
+        }
+
+        modalAprobarGratuita.show();
+    }
+
+    function abrir_rechazar_gratuita(fila, btn) {
+        const id = (fila && fila.rifa_id) || (btn && btn.dataset.id) || '';
+        const titulo = (fila && fila.rifa_titulo) || (btn && btn.dataset.titulo) || '';
+
+        document.getElementById('rechazar_gratuita_id').value = id;
+        document.getElementById('rechazar_gratuita_titulo').textContent = titulo || 'Rifa gratuita';
+        document.getElementById('rechazar_gratuita_motivo').value = '';
+        limpiar_error_moderacion('rechazar_gratuita_error');
+        modalRechazarGratuita.show();
+    }
+
+    function abrir_aprobar_cancelacion(fila, btn) {
+        const id = (fila && fila.rifa_id) || (btn && btn.dataset.id) || '';
+        const titulo = (fila && fila.rifa_titulo) || (btn && btn.dataset.titulo) || '';
+        const motivo = (fila && fila.rifa_cancelacion_motivo) || '';
+
+        document.getElementById('aprobar_cancelacion_id').value = id;
+        document.getElementById('aprobar_cancelacion_titulo').textContent = titulo || 'Rifa';
+        document.getElementById('aprobar_cancelacion_motivo_org').textContent = motivo || 'Sin motivo indicado';
+        document.getElementById('aprobar_cancelacion_motivo').value = '';
+        limpiar_error_moderacion('aprobar_cancelacion_error');
+        modalAprobarCancelacion.show();
+    }
+
+    function abrir_rechazar_cancelacion(fila, btn) {
+        const id = (fila && fila.rifa_id) || (btn && btn.dataset.id) || '';
+        const titulo = (fila && fila.rifa_titulo) || (btn && btn.dataset.titulo) || '';
+        const motivo = (fila && fila.rifa_cancelacion_motivo) || '';
+
+        document.getElementById('rechazar_cancelacion_id').value = id;
+        document.getElementById('rechazar_cancelacion_titulo').textContent = titulo || 'Rifa';
+        document.getElementById('rechazar_cancelacion_motivo_org').textContent = motivo || 'Sin motivo indicado';
+        document.getElementById('rechazar_cancelacion_motivo').value = '';
+        limpiar_error_moderacion('rechazar_cancelacion_error');
+        modalRechazarCancelacion.show();
+    }
+
     const tablaRifas = document.getElementById('tabla_rifas');
     if (tablaRifas) {
         tablaRifas.addEventListener('click', function (event) {
             const btnDetalle = event.target.closest('.btn-ver, .btn-detalle, [data-action="detalle"], [data-action="ver"]');
-            if (!btnDetalle) {
+            if (btnDetalle) {
+                const fila = fila_data(dtRifas, btnDetalle);
+                const id = btnDetalle.dataset.id || fila.rifa_id || fila.id || '';
+
+                if (!id) {
+                    mostrar_alerta('error', 'No se pudo identificar la rifa seleccionada.');
+                    return;
+                }
+
+                abrir_detalle(id);
                 return;
             }
 
-            const fila = fila_data(dtRifas, btnDetalle);
-            const id = btnDetalle.dataset.id || fila.rifa_id || fila.id || '';
+            const btnAprobarGratuita = event.target.closest('.btn-aprobar-gratuita');
+            if (btnAprobarGratuita) {
+                abrir_aprobar_gratuita(fila_data(dtRifas, btnAprobarGratuita), btnAprobarGratuita);
+                return;
+            }
+
+            const btnRechazarGratuita = event.target.closest('.btn-rechazar-gratuita');
+            if (btnRechazarGratuita) {
+                abrir_rechazar_gratuita(fila_data(dtRifas, btnRechazarGratuita), btnRechazarGratuita);
+                return;
+            }
+
+            const btnAprobarCancelacion = event.target.closest('.btn-aprobar-cancelacion');
+            if (btnAprobarCancelacion) {
+                abrir_aprobar_cancelacion(fila_data(dtRifas, btnAprobarCancelacion), btnAprobarCancelacion);
+                return;
+            }
+
+            const btnRechazarCancelacion = event.target.closest('.btn-rechazar-cancelacion');
+            if (btnRechazarCancelacion) {
+                abrir_rechazar_cancelacion(fila_data(dtRifas, btnRechazarCancelacion), btnRechazarCancelacion);
+            }
+        });
+    }
+
+    const btnConfirmarAprobarGratuita = document.getElementById('btn_confirmar_aprobar_gratuita');
+    if (btnConfirmarAprobarGratuita) {
+        btnConfirmarAprobarGratuita.addEventListener('click', function () {
+            const id = document.getElementById('aprobar_gratuita_id').value;
+            const numId = document.getElementById('aprobar_gratuita_num_id').value;
 
             if (!id) {
-                mostrar_alerta('error', 'No se pudo identificar la rifa seleccionada.');
+                return;
+            }
+            if (!numId) {
+                document.getElementById('aprobar_gratuita_error').textContent = 'Selecciona una numeración activa.';
                 return;
             }
 
-            abrir_detalle(id);
+            post_moderacion(BASE_URL + 'aprobar-gratuita/' + encodeURIComponent(id), { num_id: numId }, this, 'aprobar_gratuita_error', function (res) {
+                modalAprobarGratuita.hide();
+                mostrar_alerta('success', res.msg || 'Rifa aprobada correctamente.');
+                if (dtRifas) {
+                    dtRifas.ajax.reload(null, false);
+                }
+            });
+        });
+    }
+
+    const btnConfirmarRechazarGratuita = document.getElementById('btn_confirmar_rechazar_gratuita');
+    if (btnConfirmarRechazarGratuita) {
+        btnConfirmarRechazarGratuita.addEventListener('click', function () {
+            const id = document.getElementById('rechazar_gratuita_id').value;
+            const motivo = document.getElementById('rechazar_gratuita_motivo').value.trim();
+
+            if (!id) {
+                return;
+            }
+            if (motivo.length < 5) {
+                document.getElementById('rechazar_gratuita_error').textContent = 'Indica un motivo de al menos 5 caracteres.';
+                return;
+            }
+
+            post_moderacion(BASE_URL + 'rechazar-gratuita/' + encodeURIComponent(id), { motivo: motivo }, this, 'rechazar_gratuita_error', function (res) {
+                modalRechazarGratuita.hide();
+                mostrar_alerta('success', res.msg || 'Rifa rechazada correctamente.');
+                if (dtRifas) {
+                    dtRifas.ajax.reload(null, false);
+                }
+            });
+        });
+    }
+
+    const btnConfirmarAprobarCancelacion = document.getElementById('btn_confirmar_aprobar_cancelacion');
+    if (btnConfirmarAprobarCancelacion) {
+        btnConfirmarAprobarCancelacion.addEventListener('click', function () {
+            const id = document.getElementById('aprobar_cancelacion_id').value;
+            const motivo = document.getElementById('aprobar_cancelacion_motivo').value.trim();
+
+            if (!id) {
+                return;
+            }
+
+            post_moderacion(BASE_URL + 'aprobar-cancelacion/' + encodeURIComponent(id), { motivo: motivo }, this, 'aprobar_cancelacion_error', function (res) {
+                modalAprobarCancelacion.hide();
+                mostrar_alerta('success', res.msg || 'Cancelación aprobada.');
+                if (dtRifas) {
+                    dtRifas.ajax.reload(null, false);
+                }
+            });
+        });
+    }
+
+    const btnConfirmarRechazarCancelacion = document.getElementById('btn_confirmar_rechazar_cancelacion');
+    if (btnConfirmarRechazarCancelacion) {
+        btnConfirmarRechazarCancelacion.addEventListener('click', function () {
+            const id = document.getElementById('rechazar_cancelacion_id').value;
+            const motivo = document.getElementById('rechazar_cancelacion_motivo').value.trim();
+
+            if (!id) {
+                return;
+            }
+            if (motivo.length < 5) {
+                document.getElementById('rechazar_cancelacion_error').textContent = 'Indica un motivo de al menos 5 caracteres.';
+                return;
+            }
+
+            post_moderacion(BASE_URL + 'rechazar-cancelacion/' + encodeURIComponent(id), { motivo: motivo }, this, 'rechazar_cancelacion_error', function (res) {
+                modalRechazarCancelacion.hide();
+                mostrar_alerta('success', res.msg || 'Solicitud rechazada.');
+                if (dtRifas) {
+                    dtRifas.ajax.reload(null, false);
+                }
+            });
         });
     }
 });

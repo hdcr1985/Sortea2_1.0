@@ -21,6 +21,8 @@ class Rifa_model extends CI_Model
     protected $table_asig  = 'rif_plan_asignaciones';
     protected $table_plan  = 'rif_planes';
     protected $table_num   = 'rif_numeraciones';
+    protected $table_tickets = 'rif_tickets';
+    protected $table_ordenes = 'rif_ordenes';
     protected $primary_key = 'rifa_id';
 
     /**
@@ -915,15 +917,54 @@ class Rifa_model extends CI_Model
     }
 
     /**
-     * Aprueba una rifa gratuita pendiente de aprobación (M09).
+     * Aprueba una rifa gratuita pendiente de aprobación (M09) y le asigna
+     * la numeración activa elegida por el administrador.
      *
      * @param  int $id
+     * @param  int $num_id
      * @return array
      */
-    public function aprobar_gratuita($id)
+    public function aprobar_gratuita($id, $num_id = 0)
     {
         if (!$this->tabla_disponible()) {
             return ['ok' => FALSE, 'motivo' => 'no_disponible', 'estado' => ''];
+        }
+
+        $num_id = (int)$num_id;
+        if ($num_id <= 0) {
+            return ['ok' => FALSE, 'motivo' => 'numeracion_invalida', 'estado' => ''];
+        }
+
+        $this->load->model('Numeracion_model');
+        $numeracion = $this->Numeracion_model->get_por_id($num_id);
+
+        if (empty($numeracion) || (int)($numeracion['num_status'] ?? 0) !== 1) {
+            return ['ok' => FALSE, 'motivo' => 'numeracion_invalida', 'estado' => ''];
+        }
+
+        $desde   = (int)($numeracion['num_desde'] ?? -1);
+        $hasta   = (int)($numeracion['num_hasta'] ?? -1);
+        $padding = (int)($numeracion['num_padding'] ?? 0);
+        $total   = $hasta - $desde + 1;
+
+        if ($desde < 0
+            || $hasta <= $desde
+            || $hasta > 999999
+            || $padding < 1
+            || $padding > 6
+            || $total <= 0
+            || $total > 1000000
+            || (int)($numeracion['num_cantidad'] ?? 0) !== $total) {
+            return ['ok' => FALSE, 'motivo' => 'numeracion_invalida', 'estado' => ''];
+        }
+
+        $tipo_numeracion = 'custom';
+        if ($desde === 0 && $hasta === 99 && $padding === 2) {
+            $tipo_numeracion = '2';
+        } elseif ($desde === 0 && $hasta === 999 && $padding === 3) {
+            $tipo_numeracion = '3';
+        } elseif ($desde === 0 && $hasta === 9999 && $padding === 4) {
+            $tipo_numeracion = '4';
         }
 
         $this->db->trans_begin();
@@ -943,12 +984,28 @@ class Rifa_model extends CI_Model
                 return ['ok' => FALSE, 'motivo' => 'estado_invalido', 'estado' => $estado_actual];
             }
 
+            $validacion = $this->_validar_publicacion($rifa);
+            if (!$validacion['ok']) {
+                $this->db->trans_rollback();
+                return [
+                    'ok'     => FALSE,
+                    'motivo' => (string)$validacion['motivo'],
+                    'estado' => $estado_actual,
+                ];
+            }
+
             $ahora = date('Y-m-d H:i:s');
 
             $ok = $this->db
                 ->where($this->primary_key, (int)$rifa['rifa_id'])
                 ->where('rifa_eliminado', 0)
                 ->update($this->table, [
+                    'rifa_num_id'            => $num_id,
+                    'rifa_numeracion_tipo'   => $tipo_numeracion,
+                    'rifa_numero_desde'      => $desde,
+                    'rifa_numero_hasta'      => $hasta,
+                    'rifa_padding'           => $padding,
+                    'rifa_total_numeros'     => $total,
                     'rifa_estado'            => 'activa',
                     'rifa_publicada_at'      => $ahora,
                     'rifa_aprobacion_motivo' => NULL,
@@ -961,7 +1018,15 @@ class Rifa_model extends CI_Model
             }
 
             $this->db->trans_commit();
-            return ['ok' => TRUE, 'motivo' => '', 'estado' => 'activa'];
+
+            return [
+                'ok'        => TRUE,
+                'motivo'    => '',
+                'estado'    => 'activa',
+                'num_id'    => $num_id,
+                'num_label' => (string)($numeracion['num_label'] ?? ''),
+                'total'     => $total,
+            ];
         } catch (Throwable $e) {
             $this->db->trans_rollback();
             log_message('error', 'Rifa_model::aprobar_gratuita no pudo aprobar la rifa.');
@@ -1122,6 +1187,11 @@ class Rifa_model extends CI_Model
                 return ['ok' => FALSE, 'motivo' => 'estado_invalido', 'estado' => $estado_actual];
             }
 
+            if ($hacia === 'cancelada' && $this->_tiene_ventas_activas((int)$rifa['rifa_id'])) {
+                $this->db->trans_rollback();
+                return ['ok' => FALSE, 'motivo' => 'ventas_activas', 'estado' => $estado_actual];
+            }
+
             $this->load->model('Plan_asignacion_model');
 
             $devolucion = $this->Plan_asignacion_model->devolver_por_rifa(
@@ -1145,12 +1215,13 @@ class Rifa_model extends CI_Model
             if ($hacia === 'finalizada') {
                 $datos['rifa_finalizada_at'] = $ahora;
             } else {
+                $motivo_original = trim((string)($rifa['rifa_cancelacion_motivo'] ?? ''));
+
                 $datos['rifa_cancelada_at']       = $ahora;
                 $datos['rifa_estado_previo']      = NULL;
-                $datos['rifa_cancelacion_motivo'] = $motivo !== '' ? $motivo : (string)($rifa['rifa_cancelacion_motivo'] ?? '');
-                if ($datos['rifa_cancelacion_motivo'] === '') {
-                    $datos['rifa_cancelacion_motivo'] = NULL;
-                }
+                $datos['rifa_cancelacion_motivo'] = $motivo_original !== ''
+                    ? $motivo_original
+                    : ($motivo !== '' ? $motivo : NULL);
                 $datos['rifa_cancelacion_solicitada_at'] = NULL;
             }
 
@@ -1179,6 +1250,45 @@ class Rifa_model extends CI_Model
             log_message('error', 'Rifa_model no pudo cerrar la rifa con devolución de cupo.');
             return ['ok' => FALSE, 'motivo' => 'error', 'estado' => ''];
         }
+    }
+
+    /**
+     * Indica si una rifa tiene números vendidos u órdenes pagadas.
+     * Se usa para impedir una cancelación sin gestionar reembolsos.
+     *
+     * @param  int $rifa_id
+     * @return bool
+     */
+    private function _tiene_ventas_activas($rifa_id)
+    {
+        $rifa_id = (int)$rifa_id;
+        if ($rifa_id <= 0) {
+            return FALSE;
+        }
+
+        if ($this->db->table_exists($this->table_tickets)) {
+            $tickets = (int)$this->db
+                ->where('tick_rifa_id', $rifa_id)
+                ->where('tick_estado', 'pagado')
+                ->count_all_results($this->table_tickets);
+
+            if ($tickets > 0) {
+                return TRUE;
+            }
+        }
+
+        if ($this->db->table_exists($this->table_ordenes)) {
+            $ordenes = (int)$this->db
+                ->where('ord_rifa_id', $rifa_id)
+                ->where('ord_estado', 'pagada')
+                ->count_all_results($this->table_ordenes);
+
+            if ($ordenes > 0) {
+                return TRUE;
+            }
+        }
+
+        return FALSE;
     }
 
     /**
@@ -1232,6 +1342,13 @@ class Rifa_model extends CI_Model
 
         $tipo = (string)($rifa['rifa_tipo'] ?? 'paga');
 
+        // El precio del ticket es obligatorio para cualquier tipo de rifa:
+        // "gratuita" solo indica publicación sin consumir plan y con aprobación.
+        $precio = (float)($rifa['rifa_precio'] ?? 0);
+        if ($precio <= 0 || $precio > 9999999999.99) {
+            return ['ok' => FALSE, 'motivo' => 'precio_invalido'];
+        }
+
         if ($tipo === 'paga') {
             if ((int)($rifa['rifa_asig_id'] ?? 0) <= 0 || (int)($rifa['rifa_num_id'] ?? 0) <= 0) {
                 return ['ok' => FALSE, 'motivo' => 'sin_lote'];
@@ -1251,10 +1368,6 @@ class Rifa_model extends CI_Model
                 || $total > 1000000
                 || $total !== ($hasta - $desde + 1)) {
                 return ['ok' => FALSE, 'motivo' => 'numeracion_invalida'];
-            }
-
-            if ((float)($rifa['rifa_precio'] ?? 0) <= 0) {
-                return ['ok' => FALSE, 'motivo' => 'precio_invalido'];
             }
         }
 
