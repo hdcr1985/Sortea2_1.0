@@ -51,6 +51,7 @@ class MisRifas extends MY_Controller
         ];
         $this->page_vendor_scripts = [
             'assets/plugins/custom/datatables/datatables.bundle.js',
+            'assets/plugins/custom/tinymce/tinymce.min.js',
         ];
     }
 

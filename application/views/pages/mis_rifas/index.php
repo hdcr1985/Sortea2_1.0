@@ -19,7 +19,7 @@
  * anterior queda solo como hidden de compatibilidad; el backend deriva el
  * rango desde el lote o desde la numeración activa seleccionada.
  *
- * M03.2: la descripción se edita en un textarea y la galería acepta hasta 3
+ * M03.2: la descripción se edita con TinyMCE (respaldo a textarea) y la galería acepta hasta 3
  * imágenes (1 portada + 2 adicionales). En estados finalizada/cancelada la
  * galería es de solo lectura.
  *
@@ -585,7 +585,10 @@ $plan_lotes_form = array_values(array_filter($plan_lotes_render, function ($lote
                                 maxlength="20000"
                                 placeholder="Describe el premio o la dinámica de la rifa"></textarea>
                             <div class="invalid-feedback" data-error-for="rifa_descripcion"></div>
-                            <div class="text-muted fs-8 mt-1">Máximo 20000 caracteres.</div>
+                            <div class="d-flex flex-wrap justify-content-between gap-2 text-muted fs-8 mt-1">
+                                <span>Máximo 20000 caracteres. Editor con formato; si no carga, escribe en texto plano.</span>
+                                <span id="rifa_descripcion_contador">0 / 20000</span>
+                            </div>
                         </div>
                         <!--end::Descripción-->
 
@@ -1319,7 +1322,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const avisoBloqueada = document.getElementById('aviso_rifa_bloqueada');
     const maxPorCompraInput = document.getElementById('rifa_max_por_compra');
 
+    const DESCRIPCION_MAX = 20000;
     const descripcionTextarea = document.getElementById('rifa_descripcion');
+    const descripcionContador = document.getElementById('rifa_descripcion_contador');
+    let descripcionEditor = null;
+    let descripcionEditorIniciando = false;
 
     const galeriaContadorEl = document.getElementById('galeria_contador');
     const galeriaModoCrearEl = document.getElementById('galeria_modo_crear');
@@ -1600,16 +1607,150 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ─────────────────────────────────────────────────────
-    // Descripción (textarea)
+    // Descripción (TinyMCE + fallback a textarea)
     // ─────────────────────────────────────────────────────
+    function tinymce_disponible() {
+        return typeof window.tinymce !== 'undefined' && !!window.tinymce;
+    }
+
+    function editor_tema_oscuro() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    }
+
+    function actualizar_contador_descripcion(valor) {
+        const longitud = String(valor || '').length;
+
+        if (descripcionContador) {
+            descripcionContador.textContent = longitud + ' / ' + DESCRIPCION_MAX;
+            descripcionContador.classList.toggle('text-danger', longitud > DESCRIPCION_MAX);
+            descripcionContador.classList.toggle('fw-bold', longitud > DESCRIPCION_MAX);
+        }
+
+        return longitud;
+    }
+
+    function iniciar_editor_descripcion() {
+        if (!descripcionTextarea || descripcionEditor || descripcionEditorIniciando || !tinymce_disponible()) {
+            return Promise.resolve(descripcionEditor);
+        }
+
+        descripcionEditorIniciando = true;
+
+        return window.tinymce.init({
+            target: descripcionTextarea,
+            license_key: 'gpl',
+            height: 260,
+            menubar: false,
+            branding: false,
+            promotion: false,
+            statusbar: false,
+            cache_suffix: 'v=8.10.2',
+            placeholder: 'Describe el premio o la dinámica de la rifa',
+            entity_encoding: 'raw',
+            plugins: 'autolink lists link image table code searchreplace fullscreen wordcount',
+            toolbar: 'undo redo | blocks | bold italic underline strikethrough | bullist numlist | link image table | removeformat | code fullscreen',
+            toolbar_mode: 'sliding',
+            skin: editor_tema_oscuro() ? 'oxide-dark' : 'oxide',
+            content_css: editor_tema_oscuro() ? 'dark' : 'default',
+            content_style: "body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.875rem; line-height: 1.5; }",
+            convert_urls: false,
+            relative_urls: false,
+            remove_script_host: false,
+            link_default_target: '_blank',
+            formats: {
+                underline: { inline: 'u', exact: true },
+                strikethrough: { inline: 's', exact: true }
+            },
+            valid_elements: 'p,br,strong/b,em/i,u,s,ul,ol,li,h1,h2,h3,h4,h5,h6,blockquote,a[href|target|rel|title],img[src|alt|width|height],table,thead,tbody,tfoot,tr,th[colspan|rowspan],td[colspan|rowspan],hr,pre,code,figure,figcaption',
+            setup: function (editor) {
+                editor.on('init', function () {
+                    if (descripcionTextarea) {
+                        editor.setContent(descripcionTextarea.value || '');
+                    }
+                    editor.save();
+                    actualizar_contador_descripcion(editor.getContent());
+                });
+
+                editor.on('input change keyup undo redo', function () {
+                    editor.save();
+                    actualizar_contador_descripcion(editor.getContent());
+                });
+            }
+        }).then(function (editors) {
+            descripcionEditor = Array.isArray(editors) && editors.length ? editors[0] : null;
+            descripcionEditorIniciando = false;
+            return descripcionEditor;
+        }).catch(function () {
+            descripcionEditor = null;
+            descripcionEditorIniciando = false;
+            return null;
+        });
+    }
+
     function get_descripcion_html() {
+        if (descripcionEditor) {
+            return descripcionEditor.getContent();
+        }
+
         return descripcionTextarea ? descripcionTextarea.value : '';
     }
 
     function set_descripcion_html(html) {
-        if (descripcionTextarea) {
-            descripcionTextarea.value = String(html || '');
+        let contenido = String(html || '');
+
+        if (descripcionEditor) {
+            descripcionEditor.setContent(contenido);
+            descripcionEditor.save();
+            contenido = descripcionEditor.getContent();
         }
+
+        if (descripcionTextarea) {
+            descripcionTextarea.value = contenido;
+        }
+
+        actualizar_contador_descripcion(contenido);
+    }
+
+    function reiniciar_editor_por_tema() {
+        if (!descripcionEditor || !tinymce_disponible()) {
+            return;
+        }
+
+        const contenido = descripcionEditor.getContent();
+
+        try {
+            window.tinymce.remove(descripcionEditor);
+        } catch (e) {}
+
+        descripcionEditor = null;
+
+        if (descripcionTextarea) {
+            descripcionTextarea.value = contenido;
+        }
+
+        if (modalRifaEl && modalRifaEl.classList.contains('show')) {
+            window.setTimeout(iniciar_editor_descripcion, 60);
+        }
+    }
+
+    if (window.MutationObserver) {
+        new MutationObserver(function (mutations) {
+            for (let i = 0; i < mutations.length; i++) {
+                if (mutations[i].attributeName === 'data-bs-theme') {
+                    reiniciar_editor_por_tema();
+                    break;
+                }
+            }
+        }).observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-bs-theme']
+        });
+    }
+
+    if (descripcionTextarea) {
+        descripcionTextarea.addEventListener('input', function () {
+            actualizar_contador_descripcion(this.value);
+        });
     }
 
     // ─────────────────────────────────────────────────────
@@ -3017,6 +3158,12 @@ document.addEventListener('DOMContentLoaded', function () {
             errores.rifa_slug = 'El slug debe tener entre 3 y 120 caracteres y solo usar minúsculas, números y guiones simples.';
         }
 
+        const descripcionHtml = get_descripcion_html();
+        const descripcionLongitud = actualizar_contador_descripcion(descripcionHtml);
+        if (descripcionLongitud > DESCRIPCION_MAX) {
+            errores.rifa_descripcion = 'La descripción no puede exceder los 20000 caracteres.';
+        }
+
         const tipo = document.getElementById('rifa_tipo').value;
         const inputPrecioRifa = document.getElementById('rifa_precio');
         if (inputPrecioRifa && !inputPrecioRifa.disabled) {
@@ -3158,6 +3305,12 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(function () {
             set_loading(btnGuardarRifa, false);
             mostrar_alerta('error', 'Error de conexión con el servidor.');
+        });
+    }
+
+    if (modalRifaEl) {
+        modalRifaEl.addEventListener('shown.bs.modal', function () {
+            iniciar_editor_descripcion();
         });
     }
 
