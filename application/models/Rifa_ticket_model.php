@@ -254,18 +254,19 @@ class Rifa_ticket_model extends CI_Model
             ->result_array();
 
         $set = [];
+        $ocupados_rango = 0;
         foreach ($ocupados as $fila) {
-            $set[(int)$fila['tick_numero_int']] = TRUE;
-        }
-
-        $disponibles = [];
-        for ($n = $desde; $n <= $hasta; $n++) {
-            if (!isset($set[$n])) {
-                $disponibles[] = $n;
+            $n = (int)$fila['tick_numero_int'];
+            if ($n < $desde || $n > $hasta) {
+                continue;
             }
+            $set[$n] = TRUE;
+            $ocupados_rango++;
         }
 
-        $total_disponibles = count($disponibles);
+        $total_rango       = max(0, $hasta - $desde + 1);
+        $total_disponibles = max(0, $total_rango - $ocupados_rango);
+
         if ($offset >= $total_disponibles) {
             return [
                 'total'         => $total_disponibles,
@@ -278,14 +279,24 @@ class Rifa_ticket_model extends CI_Model
         }
 
         $items = [];
-        $fin = min($total_disponibles, $offset + $limit);
-        for ($i = $offset; $i < $fin; $i++) {
-            $n = $disponibles[$i];
-            $items[] = [
-                'numero'     => str_pad((string)$n, $padding, '0', STR_PAD_LEFT),
-                'numero_int' => $n,
-                'estado'     => 'disponible',
-            ];
+        $vistos = 0;
+        $fin    = $offset + $limit;
+
+        // Streaming: no construye el arreglo completo de disponibles.
+        for ($n = $desde; $n <= $hasta && $vistos < $fin; $n++) {
+            if (isset($set[$n])) {
+                continue;
+            }
+
+            if ($vistos >= $offset) {
+                $items[] = [
+                    'numero'     => str_pad((string)$n, $padding, '0', STR_PAD_LEFT),
+                    'numero_int' => $n,
+                    'estado'     => 'disponible',
+                ];
+            }
+
+            $vistos++;
         }
 
         return [
@@ -1194,5 +1205,208 @@ class Rifa_ticket_model extends CI_Model
         return function_exists('mb_substr')
             ? mb_substr($texto, 0, (int)$max, 'UTF-8')
             : substr($texto, 0, (int)$max);
+    }
+
+    /**
+     * Busca un número exacto dentro del rango público de una rifa.
+     *
+     * @param  int    $rifa_id
+     * @param  string $numero
+     * @param  int    $mostrar_reservados
+     * @return array
+     */
+    public function buscar_numero_publico($rifa_id, $numero, $mostrar_reservados = 1)
+    {
+        $vacio = [
+            'total'         => 0,
+            'total_numeros' => 0,
+            'disponibles'   => 0,
+            'offset'        => 0,
+            'limit'         => 1,
+            'items'         => [],
+        ];
+
+        if (!$this->tabla_disponible()) {
+            return $vacio;
+        }
+
+        $rifa = $this->_get_rifa($rifa_id);
+        if (empty($rifa)) {
+            return $vacio;
+        }
+
+        $numero  = trim((string)$numero);
+        $resumen = $this->get_resumen($rifa_id);
+
+        if ($numero === '' || !ctype_digit($numero) || strlen($numero) > 12) {
+            return array_merge($vacio, [
+                'total_numeros' => (int)$rifa['rifa_total_numeros'],
+                'disponibles'   => (int)$resumen['disponibles'],
+            ]);
+        }
+
+        $numero_int = (int)$numero;
+        $desde      = (int)$rifa['rifa_numero_desde'];
+        $hasta      = (int)$rifa['rifa_numero_hasta'];
+        $padding    = max(1, (int)$rifa['rifa_padding']);
+
+        if ($numero_int < $desde || $numero_int > $hasta) {
+            return array_merge($vacio, [
+                'total_numeros' => (int)$rifa['rifa_total_numeros'],
+                'disponibles'   => (int)$resumen['disponibles'],
+            ]);
+        }
+
+        $fila = $this->db
+            ->select('tick_estado')
+            ->where('tick_rifa_id', (int)$rifa_id)
+            ->where('tick_numero_int', $numero_int)
+            ->limit(1)
+            ->get($this->table)
+            ->row_array();
+
+        $estado = !empty($fila) ? (string)$fila['tick_estado'] : 'disponible';
+
+        if ((int)$mostrar_reservados === 0
+            && in_array($estado, ['reservado', 'bloqueado'], TRUE)) {
+            return array_merge($vacio, [
+                'total_numeros' => (int)$rifa['rifa_total_numeros'],
+                'disponibles'   => (int)$resumen['disponibles'],
+            ]);
+        }
+
+        return [
+            'total'         => 1,
+            'total_numeros' => (int)$rifa['rifa_total_numeros'],
+            'disponibles'   => (int)$resumen['disponibles'],
+            'offset'        => 0,
+            'limit'         => 1,
+            'items'         => [[
+                'numero'     => str_pad((string)$numero_int, $padding, '0', STR_PAD_LEFT),
+                'numero_int' => $numero_int,
+                'estado'     => $estado,
+            ]],
+        ];
+    }
+
+    /**
+     * Devuelve números disponibles elegidos al azar para el checkout público.
+     *
+     * @param  int $rifa_id
+     * @param  int $cantidad
+     * @return array
+     */
+    public function get_aleatorios_publicos($rifa_id, $cantidad)
+    {
+        $cantidad = max(1, min(500, (int)$cantidad));
+
+        if (!$this->tabla_disponible()) {
+            return ['ok' => FALSE, 'motivo' => 'no_disponible', 'items' => []];
+        }
+
+        $rifa = $this->_get_rifa($rifa_id);
+        if (empty($rifa)) {
+            return ['ok' => FALSE, 'motivo' => 'no_encontrada', 'items' => []];
+        }
+
+        $desde   = (int)$rifa['rifa_numero_desde'];
+        $hasta   = (int)$rifa['rifa_numero_hasta'];
+        $padding = max(1, (int)$rifa['rifa_padding']);
+
+        if ($hasta < $desde) {
+            return ['ok' => FALSE, 'motivo' => 'sin_disponibilidad', 'items' => []];
+        }
+
+        $ocupados = $this->db
+            ->select('tick_numero_int')
+            ->where('tick_rifa_id', (int)$rifa_id)
+            ->where('tick_numero_int >=', $desde)
+            ->where('tick_numero_int <=', $hasta)
+            ->get($this->table)
+            ->result_array();
+
+        $set = [];
+        foreach ($ocupados as $fila) {
+            $set[(int)$fila['tick_numero_int']] = TRUE;
+        }
+
+        $total_rango       = $hasta - $desde + 1;
+        $disponibles_total = $total_rango - count($set);
+
+        if ($disponibles_total < $cantidad) {
+            return [
+                'ok'             => FALSE,
+                'motivo'         => 'sin_disponibilidad',
+                'items'          => [],
+                'total_numeros'  => (int)$rifa['rifa_total_numeros'],
+                'disponibles'    => max(0, $disponibles_total),
+            ];
+        }
+
+        // Muestreo por rechazo: evita recorrer todo el rango en rifas grandes.
+        $items    = [];
+        $elegidos = [];
+        $intentos = 0;
+        $max_intentos = max(100, $cantidad * 80);
+
+        while (count($items) < $cantidad && $intentos < $max_intentos) {
+            $intentos++;
+            $n = random_int($desde, $hasta);
+
+            if (isset($set[$n]) || isset($elegidos[$n])) {
+                continue;
+            }
+
+            $elegidos[$n] = TRUE;
+            $items[] = [
+                'numero'     => str_pad((string)$n, $padding, '0', STR_PAD_LEFT),
+                'numero_int' => $n,
+                'estado'     => 'disponible',
+            ];
+        }
+
+        // Fallback para rifas con ocupación muy alta.
+        if (count($items) < $cantidad) {
+            $restantes = [];
+            for ($n = $desde; $n <= $hasta; $n++) {
+                if (!isset($set[$n]) && !isset($elegidos[$n])) {
+                    $restantes[] = $n;
+                }
+            }
+
+            $faltan = $cantidad - count($items);
+            if (count($restantes) < $faltan) {
+                return [
+                    'ok'             => FALSE,
+                    'motivo'         => 'sin_disponibilidad',
+                    'items'          => [],
+                    'total_numeros'  => (int)$rifa['rifa_total_numeros'],
+                    'disponibles'    => max(0, $disponibles_total),
+                ];
+            }
+
+            $keys = (array)array_rand($restantes, $faltan);
+            shuffle($keys);
+
+            foreach ($keys as $key) {
+                $n = (int)$restantes[$key];
+                $items[] = [
+                    'numero'     => str_pad((string)$n, $padding, '0', STR_PAD_LEFT),
+                    'numero_int' => $n,
+                    'estado'     => 'disponible',
+                ];
+            }
+        }
+
+        usort($items, function ($a, $b) {
+            return (int)$a['numero_int'] <=> (int)$b['numero_int'];
+        });
+
+        return [
+            'ok'            => TRUE,
+            'items'         => $items,
+            'total_numeros' => (int)$rifa['rifa_total_numeros'],
+            'disponibles'   => max(0, $disponibles_total),
+        ];
     }
 }

@@ -209,6 +209,100 @@ class Media extends CI_Controller
         return $this->_servir_imagen_metodo((string)$metodo['met_imagen']);
     }
 
+    /**
+     * Sirve la captura de pago de una orden al organizador propietario o master.
+     *
+     * @param  int $orden_id
+     * @return void
+     */
+    public function orden_captura($orden_id = 0)
+    {
+        $this->load->library('session');
+        $this->load->database();
+
+        $orden_id = (int)$orden_id;
+        $usuario  = $this->session->userdata('usuario');
+
+        if ($orden_id <= 0
+            || empty($usuario['usu_id'])
+            || !$this->db->table_exists('rif_ordenes')) {
+            return $this->_no_encontrado();
+        }
+
+        $orden = $this->db
+            ->select('ord_id, ord_org_id, ord_pago_captura')
+            ->where('ord_id', $orden_id)
+            ->limit(1)
+            ->get('rif_ordenes')
+            ->row_array();
+
+        if (empty($orden) || empty($orden['ord_pago_captura'])) {
+            return $this->_no_encontrado();
+        }
+
+        $usuario_db = $this->db
+            ->select('usu_id, usu_tipoper')
+            ->where('usu_id', (string)$usuario['usu_id'])
+            ->where('usu_status', '1')
+            ->limit(1)
+            ->get('cab_usuarios')
+            ->row_array();
+
+        if (empty($usuario_db)) {
+            return $this->_no_encontrado();
+        }
+
+        $es_master = FALSE;
+        $tipoper   = (string)($usuario_db['usu_tipoper'] ?? '');
+
+        if ($tipoper !== '') {
+            $this->load->model('Menu_model');
+            $es_master = $this->Menu_model->rol_es_master($tipoper);
+        }
+
+        if (!$es_master) {
+            $org = $this->db
+                ->select('org_id')
+                ->where('org_usuario_id', (string)$usuario['usu_id'])
+                ->where('org_eliminado', 0)
+                ->where('org_status', 1)
+                ->limit(1)
+                ->get('rif_organizadores')
+                ->row_array();
+
+            if (empty($org) || (int)$org['org_id'] !== (int)$orden['ord_org_id']) {
+                return $this->_no_encontrado();
+            }
+        }
+
+        $archivo = basename((string)$orden['ord_pago_captura']);
+        $ruta    = $this->_storage_base()
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)$orden['ord_org_id']
+            . DIRECTORY_SEPARATOR . $archivo;
+
+        if (!is_file($ruta)) {
+            return $this->_no_encontrado();
+        }
+
+        $mime = $this->_detectar_mime($ruta);
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], TRUE)) {
+            return $this->_no_encontrado();
+        }
+
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+
+        $this->output
+            ->set_content_type($mime)
+            ->set_header('Content-Length: ' . filesize($ruta))
+            ->set_header('Cache-Control: private, no-store, max-age=0')
+            ->set_header('X-Content-Type-Options: nosniff')
+            ->set_header('X-Robots-Tag: noindex, nofollow')
+            ->set_output(file_get_contents($ruta));
+    }
+
     public function theme($archivo = '')
     {
         $archivo = basename(rawurldecode(trim((string)$archivo)));

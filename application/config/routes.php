@@ -48,6 +48,7 @@ $route['media/theme/(:any)']         = 'Media/theme/$1';
 $route['media/rifa/(:num)']          = 'Media/rifa/$1';
 $route['media/rifa-imagen/(:num)']   = 'Media/rifa_imagen/$1';
 $route['media/metodo/(:num)']        = 'Media/metodo_imagen/$1';
+$route['media/orden-captura/(:num)'] = 'Media/orden_captura/$1';
 $route['notificaciones/feed']        = 'Notificaciones/feed';
 $route['notificaciones/marcar-leida/(:num)'] = 'Notificaciones/marcar_leida/$1';
 $route['notificaciones/marcar-todas'] = 'Notificaciones/marcar_todas';
@@ -149,12 +150,16 @@ $route['mis-ordenes/rechazar/(:num)']          = 'MisOrdenes/rechazar/$1';
 // ── M07 Checkout público (local y host tenant) ─────────────
 $route['sitio/(:any)/rifa/(:any)/disponibilidad'] = 'Publico/disponibilidad_local/$1/$2';
 $route['sitio/(:any)/rifa/(:any)/comprar']        = 'Publico/comprar_local/$1/$2';
+$route['sitio/(:any)/rifa/(:any)/aleatorios']     = 'Publico/aleatorios_local/$1/$2';
 $route['sitio/(:any)/rifa/(:any)']                = 'Publico/rifa_local/$1/$2';
+$route['sitio/(:any)/orden/(:any)/captura']       = 'Publico/captura_local/$1/$2';
 $route['sitio/(:any)/orden/(:any)']               = 'Publico/orden_local/$1/$2';
 
 $route['rifa/(:any)/disponibilidad'] = 'Publico/disponibilidad_host/$1';
 $route['rifa/(:any)/comprar']        = 'Publico/comprar_host/$1';
+$route['rifa/(:any)/aleatorios']     = 'Publico/aleatorios_host/$1';
 $route['rifa/(:any)']                = 'Publico/rifa_host/$1';
+$route['orden/(:any)/captura']       = 'Publico/captura_host/$1';
 $route['orden/(:any)']               = 'Publico/orden_host/$1';
 
 $route['sitio/(:any)']           = 'Publico/index/$1';

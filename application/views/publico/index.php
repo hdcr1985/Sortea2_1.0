@@ -1,6 +1,9 @@
 <?php
 $tenant_nombre = trim((string)($tenant['org_nombre_publico'] ?? 'Organizador'));
 $rifas = isset($rifas) && is_array($rifas) ? $rifas : [];
+$media_base = isset($media_base) && is_string($media_base) && trim($media_base) !== ''
+    ? rtrim(trim($media_base), '/') . '/'
+    : '';
 $limitar = function ($texto, $max) {
     $texto = trim(strip_tags((string)$texto));
     return function_exists('mb_substr') ? mb_substr($texto, 0, (int)$max, 'UTF-8') : substr($texto, 0, (int)$max);
@@ -38,7 +41,9 @@ $limitar = function ($texto, $max) {
                     <?php
                     $rifa_id = (int)$rifa['rifa_id'];
                     $imagen = trim((string)($rifa['rifa_imagen'] ?? ''));
-                    $imagen_url = $imagen !== '' ? base_url('media/rifa/' . $rifa_id) : '';
+                    $imagen_url = ($imagen !== '' && $media_base !== '')
+                        ? $media_base . 'rifa/' . $rifa_id
+                        : '';
                     $disponibles = (int)($rifa['disponibles'] ?? 0);
                     $total = (int)($rifa['rifa_total_numeros'] ?? 0);
                     $fecha = !empty($rifa['rifa_fecha_sorteo']) ? date('d/m/Y H:i', strtotime($rifa['rifa_fecha_sorteo'])) : 'Por definir';

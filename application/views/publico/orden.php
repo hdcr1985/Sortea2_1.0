@@ -13,6 +13,7 @@ $tickets = isset($orden['tickets']) && is_array($orden['tickets']) ? $orden['tic
 $snapshot = isset($snapshot) && is_array($snapshot) ? $snapshot : [];
 $campos = isset($snapshot['campos']) && is_array($snapshot['campos']) ? $snapshot['campos'] : [];
 $rifa_url = base_url('rifa/' . rawurlencode((string)($orden['rifa_slug'] ?? '')));
+$captura_url = isset($captura_url) && is_string($captura_url) ? trim($captura_url) : '';
 
 $mask_email = function ($email) {
     $email = (string)$email;
@@ -178,6 +179,33 @@ $mask_nombre = function ($nombre) {
                             <?php endif; ?>
                         <?php else: ?>
                             <div class="text-muted fs-7 mb-6">El organizador no adjuntó datos de pago.</div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($orden['ord_pago_soporte']) || $captura_url !== ''): ?>
+                            <div class="separator separator-dashed my-6"></div>
+                            <h3 class="fw-bold text-gray-900 fs-5 mb-3">Soporte de pago</h3>
+                            <div class="row g-4 align-items-start">
+                                <div class="col-md-7">
+                                    <?php if (!empty($orden['ord_pago_soporte'])): ?>
+                                        <div class="text-muted fs-8">Referencia / soporte</div>
+                                        <div class="fw-semibold text-gray-900 fs-7 mb-3"><?php echo htmlspecialchars((string)$orden['ord_pago_soporte'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <?php endif; ?>
+                                    <div class="alert bg-light-info border border-info border-dashed mb-0">
+                                        <div class="text-gray-700 fs-8">El organizador revisará este soporte antes de confirmar el pago.</div>
+                                    </div>
+                                </div>
+                                <?php if ($captura_url !== ''): ?>
+                                    <div class="col-md-5">
+                                        <a href="<?php echo htmlspecialchars($captura_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener" class="d-block border border-gray-200 rounded-3 overflow-hidden bg-light">
+                                            <img src="<?php echo htmlspecialchars($captura_url, ENT_QUOTES, 'UTF-8'); ?>"
+                                                alt="Captura del pago"
+                                                class="w-100 object-fit-contain"
+                                                style="max-height:180px;" loading="lazy" />
+                                        </a>
+                                        <div class="text-muted fs-8 mt-1">Toca la imagen para ampliarla.</div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                         <?php endif; ?>
 
                         <div class="separator separator-dashed my-6"></div>

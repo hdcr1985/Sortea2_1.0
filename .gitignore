@@ -20,6 +20,7 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 /cab_session/
 upload/rifas/*
 upload/metodos/*
+upload/ordenes/*
 
 # IDE Files
 #-------------------------

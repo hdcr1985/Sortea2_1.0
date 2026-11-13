@@ -61,6 +61,7 @@ class Publico extends Publico_Controller
             'tenant_data'   => $this->tenant_data,
             'nombre'        => $this->tenant->nombre(),
             'rifas'         => $rifas,
+            'media_base'    => $this->tenant->asset('media/'),
             'url_principal' => $this->_url_principal(),
             'anio'          => (int)date('Y'),
             'page_title'    => $this->tenant->nombre() . ' | Rifas',
@@ -100,6 +101,28 @@ class Publico extends Publico_Controller
         $this->_comprar((string)$rifa_slug);
     }
 
+    public function aleatorios_local($org_slug = '', $rifa_slug = '')
+    {
+        $this->_verificar_org_slug($org_slug);
+        $this->_aleatorios((string)$rifa_slug);
+    }
+
+    public function aleatorios_host($rifa_slug = '')
+    {
+        $this->_aleatorios((string)$rifa_slug);
+    }
+
+    public function captura_local($org_slug = '', $codigo = '')
+    {
+        $this->_verificar_org_slug($org_slug);
+        $this->_captura((string)$codigo);
+    }
+
+    public function captura_host($codigo = '')
+    {
+        $this->_captura((string)$codigo);
+    }
+
     public function orden_local($org_slug = '', $codigo = '')
     {
         $this->_verificar_org_slug($org_slug);
@@ -135,12 +158,13 @@ class Publico extends Publico_Controller
                 && (int)$detalle['orgmet_activo'] === 1
                 && !empty($detalle['completo'])) {
                 $metodos[] = [
-                    'orgmet_id'    => (int)$detalle['orgmet_id'],
-                    'nombre'       => (string)$detalle['met_nombre'],
-                    'descripcion'  => (string)($detalle['met_descripcion'] ?? ''),
-                    'icono'        => (string)($detalle['met_icono'] ?? 'ki-bill'),
-                    'imagen'       => !empty($detalle['met_imagen'])
-                        ? base_url('media/metodo/' . (int)$detalle['met_id'])
+                    'orgmet_id'     => (int)$detalle['orgmet_id'],
+                    'nombre'        => (string)$detalle['met_nombre'],
+                    'descripcion'   => (string)($detalle['met_descripcion'] ?? ''),
+                    'instrucciones' => (string)($detalle['met_instrucciones'] ?? ''),
+                    'icono'         => (string)($detalle['met_icono'] ?? 'ki-bill'),
+                    'imagen'        => !empty($detalle['met_imagen'])
+                        ? $this->tenant->asset('media/metodo/' . (int)$detalle['met_id'])
                         : '',
                 ];
             }
@@ -151,7 +175,7 @@ class Publico extends Publico_Controller
             foreach ($this->Rifa_imagen_model->get_por_rifa((int)$rifa['rifa_id']) as $img) {
                 $imagenes[] = [
                     'id'        => (int)$img['img_id'],
-                    'url'       => base_url('media/rifa-imagen/' . (int)$img['img_id']),
+                    'url'       => $this->tenant->asset('media/rifa-imagen/' . (int)$img['img_id']),
                     'principal' => (int)$img['img_principal'] === 1,
                 ];
             }
@@ -188,11 +212,13 @@ class Publico extends Publico_Controller
             'resumen'            => $resumen,
             'metodos'            => $metodos,
             'imagenes'           => $imagenes,
+            'media_base'          => $this->tenant->asset('media/'),
             'csrf_name'          => $csrf_name,
             'csrf_hash'          => $csrf_hash,
             'checkout_token'     => $checkout_token,
             'disponibilidad_url' => base_url('rifa/' . $slug . '/disponibilidad'),
             'comprar_url'        => base_url('rifa/' . $slug . '/comprar'),
+            'aleatorios_url'     => base_url('rifa/' . $slug . '/aleatorios'),
             'url_principal'      => $this->_url_principal(),
             'anio'               => (int)date('Y'),
             'page_title'         => (string)$rifa['rifa_titulo'] . ' | ' . $this->tenant->nombre(),
@@ -208,21 +234,114 @@ class Publico extends Publico_Controller
             return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
         }
 
+        $limite = $this->_limite_publico('disponibilidad', (int)$rifa['rifa_id'], 120, 60);
+        if (empty($limite['ok'])) {
+            return $this->_respuesta_limite_publico($limite);
+        }
+
         $offset = $this->input->get('offset', TRUE);
         $limit  = $this->input->get('limit', TRUE);
+        $buscar = $this->input->get('buscar', TRUE);
 
         $offset = is_scalar($offset) ? max(0, (int)$offset) : 0;
         $limit  = is_scalar($limit) ? (int)$limit : 200;
+        $buscar = is_scalar($buscar) ? trim((string)$buscar) : '';
 
-        $this->json([
-            'ok'   => TRUE,
-            'data' => $this->Rifa_ticket_model->get_mapa_publico(
+        $data = $buscar !== ''
+            ? $this->Rifa_ticket_model->buscar_numero_publico(
+                (int)$rifa['rifa_id'],
+                $buscar,
+                (int)$rifa['rifa_mostrar_reservados']
+            )
+            : $this->Rifa_ticket_model->get_mapa_publico(
                 (int)$rifa['rifa_id'],
                 $offset,
                 $limit,
                 (int)$rifa['rifa_mostrar_reservados']
-            ),
+            );
+
+        $this->json([
+            'ok'   => TRUE,
+            'data' => $data,
         ]);
+    }
+
+    private function _aleatorios($rifa_slug)
+    {
+        if (strtoupper($this->input->method(TRUE)) !== 'GET') {
+            return $this->json(['ok' => FALSE, 'msg' => 'Método no permitido.'], 405);
+        }
+
+        $org_id = (int)$this->tenant->id();
+        $rifa   = $this->Rifa_model->get_por_slug($rifa_slug, $org_id);
+
+        if (empty($rifa) || (string)$rifa['rifa_estado'] !== 'activa') {
+            return $this->json(['ok' => FALSE, 'msg' => 'Rifa no encontrada.'], 404);
+        }
+
+        $limite = $this->_limite_publico('aleatorios', (int)$rifa['rifa_id'], 30, 60);
+        if (empty($limite['ok'])) {
+            return $this->_respuesta_limite_publico($limite);
+        }
+
+        $cantidad = $this->input->get('cantidad', TRUE);
+        $cantidad = is_scalar($cantidad) ? (int)$cantidad : 0;
+        $cantidad = max(1, min(max(1, (int)$rifa['rifa_max_por_compra']), $cantidad));
+
+        $res = $this->Rifa_ticket_model->get_aleatorios_publicos(
+            (int)$rifa['rifa_id'],
+            $cantidad
+        );
+
+        if (empty($res['ok'])) {
+            return $this->json([
+                'ok'  => FALSE,
+                'msg' => 'No hay suficientes números disponibles para la selección al azar.',
+            ], 409);
+        }
+
+        $this->json([
+            'ok'   => TRUE,
+            'data' => $res,
+        ]);
+    }
+
+    private function _captura($codigo)
+    {
+        $org_id = (int)$this->tenant->id();
+        $orden  = $this->Orden_model->get_por_codigo((string)$codigo, $org_id);
+
+        if (empty($orden) || empty($orden['ord_pago_captura'])) {
+            show_404();
+        }
+
+        $archivo = basename((string)$orden['ord_pago_captura']);
+        $ruta    = rtrim(FCPATH, '\\/')
+            . DIRECTORY_SEPARATOR . 'upload'
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)$orden['ord_org_id']
+            . DIRECTORY_SEPARATOR . $archivo;
+
+        if (!is_file($ruta)) {
+            show_404();
+        }
+
+        $mime = $this->_detectar_mime_pago($ruta);
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], TRUE)) {
+            show_404();
+        }
+
+        if (ob_get_level() > 0) {
+            ob_clean();
+        }
+
+        $this->output
+            ->set_content_type($mime)
+            ->set_header('Content-Length: ' . filesize($ruta))
+            ->set_header('Cache-Control: private, no-store, max-age=0')
+            ->set_header('X-Content-Type-Options: nosniff')
+            ->set_header('X-Robots-Tag: noindex, nofollow')
+            ->set_output(file_get_contents($ruta));
     }
 
     private function _comprar($rifa_slug)
@@ -296,6 +415,55 @@ class Publico extends Publico_Controller
             ], 422);
         }
 
+        $pago_soporte = trim((string)$this->_post_escalar('pago_soporte'));
+
+        if ($pago_soporte === '') {
+            return $this->json([
+                'ok'      => FALSE,
+                'msg'     => 'Indica el soporte o referencia del pago.',
+                'errores' => ['pago_soporte' => 'El soporte de pago es obligatorio.'],
+            ], 422);
+        }
+
+        if ($this->_longitud($pago_soporte) > 120) {
+            return $this->json([
+                'ok'      => FALSE,
+                'msg'     => 'El soporte de pago no puede exceder 120 caracteres.',
+                'errores' => ['pago_soporte' => 'Máximo 120 caracteres.'],
+            ], 422);
+        }
+
+        $precheck = $this->_validar_precheckout($rifa, $org_id);
+        if (empty($precheck['ok'])) {
+            return $this->json([
+                'ok'      => FALSE,
+                'msg'     => (string)($precheck['msg'] ?? 'Revisa los datos de la compra.'),
+                'errores' => isset($precheck['errores']) && is_array($precheck['errores'])
+                    ? $precheck['errores']
+                    : [],
+            ], 422);
+        }
+
+        $limite_subida = $this->_limite_subida_checkout($rifa_id);
+        if (empty($limite_subida['ok'])) {
+            $retry = max(1, (int)($limite_subida['retry'] ?? 300));
+            $this->output->set_header('Retry-After: ' . $retry);
+            return $this->json([
+                'ok'    => FALSE,
+                'msg'   => 'Demasiados intentos con comprobante. Espera unos minutos e inténtalo nuevamente.',
+                'retry' => $retry,
+            ], 429);
+        }
+
+        $captura = $this->_subir_captura_pago($org_id);
+        if (!$captura['ok']) {
+            return $this->json([
+                'ok'      => FALSE,
+                'msg'     => (string)$captura['error'],
+                'errores' => ['pago_captura' => (string)$captura['error']],
+            ], 422);
+        }
+
         $res = $this->Orden_model->crear(
             (int)$rifa['rifa_id'],
             $org_id,
@@ -304,10 +472,17 @@ class Publico extends Publico_Controller
             (string)$this->_post_escalar('numeros'),
             (int)$this->_post_escalar('cantidad', '0'),
             $ip,
-            (string)$this->input->user_agent()
+            (string)$this->input->user_agent(),
+            [
+                'soporte' => $pago_soporte,
+                'captura' => $captura['archivo'],
+                'mime'    => $captura['mime'],
+                'size'    => $captura['size'],
+            ]
         );
 
         if (!$res['ok']) {
+            $this->_borrar_captura_pago($org_id, (string)$captura['archivo']);
             return $this->_respuesta_compra($res, $rifa);
         }
 
@@ -436,6 +611,7 @@ class Publico extends Publico_Controller
             'nombre'        => $this->tenant->nombre(),
             'orden'         => $orden,
             'snapshot'      => $snapshot,
+            'captura_url'   => $this->_url_captura_orden($orden),
             'robots'        => 'noindex, nofollow',
             'url_principal' => $this->_url_principal(),
             'anio'          => (int)date('Y'),
@@ -454,6 +630,343 @@ class Publico extends Publico_Controller
     {
         $valor = $this->input->post($key, TRUE);
         return is_scalar($valor) ? (string)$valor : $default;
+    }
+
+    private function _limite_publico($accion, $rifa_id, $max, $ventana)
+    {
+        return $this->_consumir_rate_limit(
+            'public:' . preg_replace('/[^a-z_]/i', '', (string)$accion),
+            (int)$rifa_id,
+            (int)$max,
+            (int)$ventana
+        );
+    }
+
+    private function _respuesta_limite_publico(array $limite)
+    {
+        $retry = max(1, (int)($limite['retry'] ?? 60));
+        $this->output->set_header('Retry-After: ' . $retry);
+
+        return $this->json([
+            'ok'    => FALSE,
+            'msg'   => 'Demasiadas solicitudes. Espera unos segundos e inténtalo nuevamente.',
+            'retry' => $retry,
+        ], 429);
+    }
+
+    private function _limite_subida_checkout($rifa_id)
+    {
+        return $this->_consumir_rate_limit('upload', (int)$rifa_id, 5, 300);
+    }
+
+    private function _consumir_rate_limit($accion, $rifa_id, $max, $ventana)
+    {
+        // Para el rate limit se usa la IP de la conexión directa. No se confía
+        // en X-Forwarded-For / CF-Connecting-IP sin una allowlist de proxy.
+        $ip = trim((string)$this->input->server('REMOTE_ADDR'));
+        if ($ip === '') {
+            $ip = 'unknown';
+        }
+
+        $clave = substr($accion . ':' . (int)$rifa_id . ':' . $ip, 0, 150);
+        $ahora = time();
+
+        if ($this->db->table_exists('rif_rate_limits')) {
+            $inicio_ventana = date('Y-m-d H:i:s', $ahora - (int)$ventana);
+
+            $this->db->query(
+                "INSERT INTO rif_rate_limits (rate_clave, rate_inicio, rate_count)
+                 VALUES (?, ?, 1)
+                 ON DUPLICATE KEY UPDATE
+                   rate_count = IF(rate_inicio < ?, 1, rate_count + 1),
+                   rate_inicio = IF(rate_inicio < ?, VALUES(rate_inicio), rate_inicio)",
+                [$clave, date('Y-m-d H:i:s', $ahora), $inicio_ventana, $inicio_ventana]
+            );
+
+            $fila = $this->db
+                ->select('rate_inicio, rate_count')
+                ->where('rate_clave', $clave)
+                ->limit(1)
+                ->get('rif_rate_limits')
+                ->row_array();
+
+            if (empty($fila)) {
+                return ['ok' => TRUE, 'retry' => 0];
+            }
+
+            if ((int)$fila['rate_count'] > (int)$max) {
+                return [
+                    'ok'    => FALSE,
+                    'retry' => max(1, (int)$ventana - ($ahora - strtotime((string)$fila['rate_inicio']))),
+                ];
+            }
+
+            if (mt_rand(1, 200) === 1) {
+                $this->db
+                    ->where('rate_inicio <', date('Y-m-d H:i:s', $ahora - 86400))
+                    ->delete('rif_rate_limits');
+            }
+
+            return ['ok' => TRUE, 'retry' => 0];
+        }
+
+        // Fallback si la migracion aun no fue aplicada.
+        $clave_session = 'public_rate_' . preg_replace('/[^a-z_]/i', '', (string)$accion) . '_' . (int)$rifa_id;
+        $hist = $this->session->userdata($clave_session);
+
+        if (!is_array($hist)) {
+            $hist = [];
+        }
+
+        $hist = array_values(array_filter($hist, function ($marca) use ($ahora, $ventana) {
+            return (int)$marca > ($ahora - (int)$ventana);
+        }));
+
+        if (count($hist) >= (int)$max) {
+            return [
+                'ok'    => FALSE,
+                'retry' => max(1, (int)$ventana - ($ahora - min($hist))),
+            ];
+        }
+
+        $hist[] = $ahora;
+        $this->session->set_userdata($clave_session, $hist);
+
+        return ['ok' => TRUE, 'retry' => 0];
+    }
+
+    private function _validar_precheckout(array $rifa, $org_id)
+    {
+        $orgmet_id = (int)$this->_post_escalar('orgmet_id', '0');
+
+        if ($orgmet_id <= 0) {
+            return [
+                'ok'      => FALSE,
+                'msg'     => 'Selecciona un método de pago.',
+                'errores' => ['orgmet_id' => 'Selecciona un método de pago.'],
+            ];
+        }
+
+        $metodo = $this->Org_metodo_model->get_por_id($orgmet_id, $org_id);
+
+        if (empty($metodo)
+            || (int)($metodo['orgmet_activo'] ?? 0) !== 1
+            || empty($metodo['completo'])) {
+            return [
+                'ok'      => FALSE,
+                'msg'     => 'El método de pago seleccionado no está disponible.',
+                'errores' => ['orgmet_id' => 'El método de pago no está disponible.'],
+            ];
+        }
+
+        $vinculado = FALSE;
+        foreach ($this->Org_metodo_model->get_rifa_metodos((int)$rifa['rifa_id']) as $metodo_rifa) {
+            if ((int)$metodo_rifa['rm_orgmet_id'] === $orgmet_id
+                && (int)$metodo_rifa['orgmet_activo'] === 1
+                && (int)$metodo_rifa['met_status'] === 1
+                && (int)$metodo_rifa['met_eliminado'] === 0) {
+                $vinculado = TRUE;
+                break;
+            }
+        }
+
+        if (!$vinculado) {
+            return [
+                'ok'      => FALSE,
+                'msg'     => 'El método de pago no pertenece a esta rifa.',
+                'errores' => ['orgmet_id' => 'El método de pago no pertenece a esta rifa.'],
+            ];
+        }
+
+        $max = max(1, (int)$rifa['rifa_max_por_compra']);
+
+        if ((string)$rifa['rifa_modo_asignacion'] === 'manual') {
+            $raw = trim((string)$this->_post_escalar('numeros'));
+
+            if ($raw === '') {
+                return [
+                    'ok'      => FALSE,
+                    'msg'     => 'Selecciona al menos un número.',
+                    'errores' => ['numeros' => 'Selecciona al menos un número.'],
+                ];
+            }
+
+            $partes = explode(',', $raw);
+
+            if (count($partes) > $max) {
+                return [
+                    'ok'      => FALSE,
+                    'msg'     => 'Superaste el máximo de números por orden.',
+                    'errores' => ['numeros' => 'Máximo ' . $max . ' números por orden.'],
+                ];
+            }
+
+            $desde = (int)$rifa['rifa_numero_desde'];
+            $hasta = (int)$rifa['rifa_numero_hasta'];
+
+            foreach ($partes as $parte) {
+                $parte = trim((string)$parte);
+                if ($parte === '' || !ctype_digit($parte)
+                    || (int)$parte < $desde || (int)$parte > $hasta) {
+                    return [
+                        'ok'      => FALSE,
+                        'msg'     => 'La selección de números no es válida.',
+                        'errores' => ['numeros' => 'La selección de números no es válida.'],
+                    ];
+                }
+            }
+        } else {
+            $cantidad = (int)$this->_post_escalar('cantidad', '0');
+
+            if ($cantidad < 1 || $cantidad > $max) {
+                return [
+                    'ok'      => FALSE,
+                    'msg'     => 'Indica una cantidad entre 1 y ' . $max . '.',
+                    'errores' => ['cantidad' => 'Indica una cantidad entre 1 y ' . $max . '.'],
+                ];
+            }
+        }
+
+        return ['ok' => TRUE];
+    }
+
+    private function _longitud($valor)
+    {
+        return function_exists('mb_strlen')
+            ? mb_strlen((string)$valor, 'UTF-8')
+            : strlen((string)$valor);
+    }
+
+    private function _subir_captura_pago($org_id)
+    {
+        if (!isset($_FILES['pago_captura']) || !is_array($_FILES['pago_captura'])) {
+            return ['ok' => FALSE, 'error' => 'Adjunta la captura del pago.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $archivo = $_FILES['pago_captura'];
+
+        if (!is_array($archivo) || is_array($archivo['name'] ?? NULL)) {
+            return ['ok' => FALSE, 'error' => 'El archivo de captura no es válido.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $error = (int)($archivo['error'] ?? UPLOAD_ERR_NO_FILE);
+
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return ['ok' => FALSE, 'error' => 'Adjunta la captura del pago.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        if ($error !== UPLOAD_ERR_OK) {
+            return ['ok' => FALSE, 'error' => 'No se pudo recibir la captura del pago.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $size = (int)($archivo['size'] ?? 0);
+        if ($size <= 0 || $size > 5 * 1024 * 1024) {
+            return ['ok' => FALSE, 'error' => 'La captura debe pesar menos de 5 MB.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $tmp = (string)($archivo['tmp_name'] ?? '');
+        if ($tmp === '' || !is_uploaded_file($tmp)) {
+            return ['ok' => FALSE, 'error' => 'El archivo de captura no es válido.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $mime = $this->_detectar_mime_pago($tmp);
+        $permitidos = [
+            'image/jpeg' => 'jpg',
+            'image/png'  => 'png',
+            'image/webp' => 'webp',
+        ];
+
+        if (!isset($permitidos[$mime])) {
+            return ['ok' => FALSE, 'error' => 'La captura debe ser JPG, PNG o WEBP.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $dir = rtrim(FCPATH, '\\/')
+            . DIRECTORY_SEPARATOR . 'upload'
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)$org_id;
+
+        if (!is_dir($dir) && !@mkdir($dir, 0755, TRUE) && !is_dir($dir)) {
+            return ['ok' => FALSE, 'error' => 'No se pudo preparar el almacenamiento de la captura.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        $nombre = 'pago_' . date('Ymd_His') . '_' . bin2hex(random_bytes(8)) . '.' . $permitidos[$mime];
+        $destino = $dir . DIRECTORY_SEPARATOR . $nombre;
+
+        if (!@move_uploaded_file($tmp, $destino)) {
+            return ['ok' => FALSE, 'error' => 'No se pudo guardar la captura del pago.', 'archivo' => '', 'mime' => '', 'size' => 0];
+        }
+
+        @chmod($destino, 0644);
+
+        return [
+            'ok'      => TRUE,
+            'error'   => '',
+            'archivo' => $nombre,
+            'mime'    => $mime,
+            'size'    => $size,
+        ];
+    }
+
+    private function _borrar_captura_pago($org_id, $archivo)
+    {
+        $archivo = basename(trim((string)$archivo));
+        if ($archivo === '') {
+            return;
+        }
+
+        $ruta = rtrim(FCPATH, '\\/')
+            . DIRECTORY_SEPARATOR . 'upload'
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)$org_id
+            . DIRECTORY_SEPARATOR . $archivo;
+
+        if (is_file($ruta)) {
+            @unlink($ruta);
+        }
+    }
+
+    private function _detectar_mime_pago($ruta)
+    {
+        if (function_exists('finfo_open')) {
+            $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $mime = finfo_file($finfo, $ruta) ?: 'application/octet-stream';
+                if (PHP_VERSION_ID < 80500 && function_exists('finfo_close')) {
+                    @finfo_close($finfo);
+                }
+                unset($finfo);
+                return $mime;
+            }
+        }
+
+        if (function_exists('getimagesize')) {
+            $info = @getimagesize($ruta);
+            if ($info !== FALSE && !empty($info['mime'])) {
+                return (string)$info['mime'];
+            }
+        }
+
+        return 'application/octet-stream';
+    }
+
+    private function _url_captura_orden(array $orden)
+    {
+        if (empty($orden['ord_pago_captura']) || empty($orden['ord_codigo'])) {
+            return '';
+        }
+
+        $archivo = basename((string)$orden['ord_pago_captura']);
+        $ruta    = rtrim(FCPATH, '\\/')
+            . DIRECTORY_SEPARATOR . 'upload'
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)($orden['ord_org_id'] ?? 0)
+            . DIRECTORY_SEPARATOR . $archivo;
+
+        if (!is_file($ruta)) {
+            return '';
+        }
+
+        return base_url('orden/' . rawurlencode((string)$orden['ord_codigo']) . '/captura');
     }
 
     private function _url_principal()

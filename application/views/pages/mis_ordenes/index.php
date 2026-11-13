@@ -213,6 +213,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             html += '</div>';
 
+            if (orden.ord_pago_soporte || data.captura_url) {
+                html += '<div class="fw-bold text-gray-900 fs-6 mb-2">Soporte de pago</div>';
+                html += '<div class="border border-gray-200 rounded-3 p-4 bg-light mb-5">';
+                if (orden.ord_pago_soporte) {
+                    html += '<div class="text-muted fs-8">Referencia / soporte</div><div class="fw-semibold text-gray-900 fs-7 mb-2">' + escapeHtml(orden.ord_pago_soporte) + '</div>';
+                }
+                if (data.captura_url) {
+                    html += '<a href="' + escapeHtml(data.captura_url) + '" target="_blank" rel="noopener" class="d-inline-block border border-gray-200 rounded-3 overflow-hidden bg-white">';
+                    html += '<img src="' + escapeHtml(data.captura_url) + '" alt="Captura del pago" class="w-100 object-fit-contain" style="max-height:220px;" loading="lazy" />';
+                    html += '</a>';
+                    html += '<div class="text-muted fs-8 mt-1">Toca la captura para ampliarla.</div>';
+                }
+                html += '</div>';
+            }
+
             if (orden.ord_notas_comprador) {
                 html += '<div class="fw-bold text-gray-900 fs-6 mb-2">Notas del comprador</div><div class="text-muted fs-7 mb-4">' + escapeHtml(orden.ord_notas_comprador) + '</div>';
             }

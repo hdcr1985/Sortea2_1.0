@@ -50,7 +50,7 @@ class Orden_model extends CI_Model
      * @param  string $ua
      * @return array
      */
-    public function crear($rifa_id, $org_id, array $comprador, $orgmet_id, $numeros_input = '', $cantidad = 0, $ip = '', $ua = '')
+    public function crear($rifa_id, $org_id, array $comprador, $orgmet_id, $numeros_input = '', $cantidad = 0, $ip = '', $ua = '', array $pago = [])
     {
         if (!$this->tabla_disponible()) {
             return ['ok' => FALSE, 'motivo' => 'no_disponible'];
@@ -215,6 +215,19 @@ class Orden_model extends CI_Model
                 'ord_metodo_snapshot'  => $snapshot,
                 'ord_estado'           => 'pendiente',
                 'ord_notas_comprador'  => $comprador['notas'] ?: NULL,
+                'ord_pago_soporte'     => !empty($pago['soporte'])
+                    ? $this->_limitar((string)$pago['soporte'], 120)
+                    : NULL,
+                'ord_pago_captura'     => !empty($pago['captura'])
+                    ? $this->_limitar((string)$pago['captura'], 255)
+                    : NULL,
+                'ord_pago_captura_mime' => !empty($pago['mime'])
+                    ? $this->_limitar((string)$pago['mime'], 100)
+                    : NULL,
+                'ord_pago_captura_size' => !empty($pago['captura']) && isset($pago['size'])
+                    ? max(0, (int)$pago['size'])
+                    : NULL,
+                'ord_pago_captura_at'  => !empty($pago['captura']) ? $ahora : NULL,
                 'ord_reserva_expira_at' => $expira,
                 'ord_ip'               => $ip !== '' ? $this->_limitar($ip, 45) : NULL,
                 'ord_user_agent'       => $ua !== '' ? $this->_limitar($ua, 255) : NULL,
@@ -436,10 +449,15 @@ class Orden_model extends CI_Model
             $this->db->where('tick_orden_id', (int)$orden_id)->delete($this->table_tickets);
 
             $this->db->where('ord_id', (int)$orden_id)->update($this->table, [
-                'ord_estado'         => 'rechazada',
-                'ord_motivo_rechazo' => $motivo !== '' ? $this->_limitar($motivo, 255) : NULL,
-                'ord_rechazada_at'   => $ahora,
-                'ord_updated_at'     => $ahora,
+                'ord_estado'              => 'rechazada',
+                'ord_motivo_rechazo'      => $motivo !== '' ? $this->_limitar($motivo, 255) : NULL,
+                'ord_pago_soporte'        => NULL,
+                'ord_pago_captura'        => NULL,
+                'ord_pago_captura_mime'   => NULL,
+                'ord_pago_captura_size'   => NULL,
+                'ord_pago_captura_at'     => NULL,
+                'ord_rechazada_at'        => $ahora,
+                'ord_updated_at'          => $ahora,
             ]);
 
             if ($this->db->trans_status() === FALSE) {
@@ -448,6 +466,7 @@ class Orden_model extends CI_Model
             }
 
             $this->db->trans_commit();
+            $this->_limpiar_captura($orden);
             return ['ok' => TRUE, 'orden' => $this->get_por_id((int)$orden_id, (int)$org_id)];
         } catch (Throwable $e) {
             $this->db->trans_rollback();
@@ -513,9 +532,14 @@ class Orden_model extends CI_Model
             $this->_historial_numeros($orden_id, $tickets, 'expirado', (string)$orden['ord_comprador_nombre'], 'Reserva expirada');
             $this->db->where('tick_orden_id', (int)$orden_id)->delete($this->table_tickets);
             $this->db->where('ord_id', (int)$orden_id)->update($this->table, [
-                'ord_estado'      => 'expirada',
-                'ord_expirada_at' => $ahora,
-                'ord_updated_at'  => $ahora,
+                'ord_estado'              => 'expirada',
+                'ord_pago_soporte'        => NULL,
+                'ord_pago_captura'        => NULL,
+                'ord_pago_captura_mime'   => NULL,
+                'ord_pago_captura_size'   => NULL,
+                'ord_pago_captura_at'     => NULL,
+                'ord_expirada_at'         => $ahora,
+                'ord_updated_at'          => $ahora,
             ]);
 
             if ($this->db->trans_status() === FALSE) {
@@ -524,6 +548,7 @@ class Orden_model extends CI_Model
             }
 
             $this->db->trans_commit();
+            $this->_limpiar_captura($orden);
             return TRUE;
         } catch (Throwable $e) {
             $this->db->trans_rollback();
@@ -982,6 +1007,30 @@ class Orden_model extends CI_Model
             }
             unset($fila);
             $this->db->insert_batch($this->table_hist, $filas);
+        }
+    }
+
+    /**
+     * Elimina el archivo de captura de una orden cerrada.
+     *
+     * @param  array $orden
+     * @return void
+     */
+    private function _limpiar_captura(array $orden)
+    {
+        $archivo = basename(trim((string)($orden['ord_pago_captura'] ?? '')));
+        if ($archivo === '') {
+            return;
+        }
+
+        $ruta = rtrim(FCPATH, '\\/')
+            . DIRECTORY_SEPARATOR . 'upload'
+            . DIRECTORY_SEPARATOR . 'ordenes'
+            . DIRECTORY_SEPARATOR . (int)($orden['ord_org_id'] ?? 0)
+            . DIRECTORY_SEPARATOR . $archivo;
+
+        if (is_file($ruta) && !@unlink($ruta)) {
+            log_message('error', 'Orden_model no pudo eliminar la captura de pago de la orden ' . (int)($orden['ord_id'] ?? 0) . '.');
         }
     }
 

@@ -59,12 +59,26 @@ class MisOrdenes extends MY_Controller
             $snapshot = json_decode((string)$orden['ord_metodo_snapshot'], TRUE) ?: [];
         }
 
+        $captura_url = '';
+        if (!empty($orden['ord_pago_captura'])) {
+            $ruta_captura = rtrim(FCPATH, '\\/')
+                . DIRECTORY_SEPARATOR . 'upload'
+                . DIRECTORY_SEPARATOR . 'ordenes'
+                . DIRECTORY_SEPARATOR . (int)$orden['ord_org_id']
+                . DIRECTORY_SEPARATOR . basename((string)$orden['ord_pago_captura']);
+
+            if (is_file($ruta_captura)) {
+                $captura_url = base_url('media/orden-captura/' . (int)$orden['ord_id']);
+            }
+        }
+
         $this->json([
             'ok'   => TRUE,
             'data' => [
-                'orden'    => $orden,
-                'tickets'  => $orden['tickets'] ?? [],
-                'snapshot' => $snapshot,
+                'orden'       => $orden,
+                'tickets'     => $orden['tickets'] ?? [],
+                'snapshot'    => $snapshot,
+                'captura_url' => $captura_url,
             ],
         ]);
     }

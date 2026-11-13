@@ -904,3 +904,18 @@ contraseñas ni tokens:
 - **Permisos**: se creó `cab_permisologia`/`cab_permiaccion` `1000_147` para el rol Admin Master. Los permisos existentes de los hijos no se modificaron.
 - **Migración**: `database/2026-11-11_move_admin_menus.sql`, idempotente. Invalida `permisos_version` para que las sesiones reconstruyan el snapshot del menú.
 - **Validación**: `Menu_model::get_arbol_por_usuario('000001','1000')` devuelve `Administración` con `Organizadores` y `Rifas` como hijos; el resto del árbol permanece igual.
+
+### ADR-048: URLs de media en el sitio público multi-tenant (2026-11-11)
+- **Problema**: `Publico_Controller` reescribe `base_url` a `/sitio/<slug>/`; al generar imágenes con `base_url('media/rifa/...')` el HTML apuntaba a `/sitio/<slug>/media/...`, que devuelve 404.
+- **Decisión**: las imágenes del sitio público se construyen con `Tenant::asset('media/...')`, que usa la raíz de la app en resolución local y el host del tenant en producción. Las vistas reciben `media_base` desde `Publico`.
+- **Aplicación**: portada y galería de la ficha, tarjetas del home y logos de métodos de pago.
+- **Validación**: `/sitio/tu-suerte` y `/sitio/tu-suerte/rifa/gran-rifa-de-aniversario` generan URLs `http://localhost/Sortea2_1.0/media/rifa/...`; `media/rifa/103`, `media/rifa/285` y `media/rifa-imagen/1` responden 200 con `image/jpeg`.
+
+### ADR-049: Rediseño de ficha pública, selección de números y comprobante de pago (2026-11-13)
+- **Decisión**: modernizar la ficha pública del organizador con hero visual, progreso de venta, números seleccionables sin checkbox, buscador exacto, selección al azar por cantidad, métodos de pago como tarjetas con icono/imagen, galería modal y soporte/captura del pago en el mismo checkout.
+- **UI**: `application/views/publico/rifa.php` reemplaza el select de métodos por radios tipo tarjeta, agrega chips de selección, barra de progreso, modal de galería, preview de captura, animaciones/transiciones y soporte claro/oscuro. La selección de números usa botones con estados `disponible`, `reservado`, `pagado` y `bloqueado`, sin checkbox.
+- **Backend**: `Publico` agrega búsqueda exacta (`buscar`), aleatorios (`aleatorios`) y captura pública; `Rifa_ticket_model` implementa `buscar_numero_publico()` y `get_aleatorios_publicos()` con `random_int`. `Orden_model` guarda `ord_pago_soporte`, `ord_pago_captura`, `ord_pago_captura_mime`, `ord_pago_captura_size` y `ord_pago_captura_at`.
+- **Persistencia**: migraciones `2026-11-13_add_payment_proof_to_orders.sql` y `2026-11-13_create_public_rate_limits.sql`. La captura se valida por MIME real (JPG/PNG/WEBP, máximo 5 MB) y se guarda en `upload/ordenes/<org_id>/`; se sirve por ruta pública con código de orden y por `Media::orden_captura()` para el organizador/master.
+- **Seguridad/abuso**: precheck de método/cantidad/números antes de subir la captura; límites por `REMOTE_ADDR` en `rif_rate_limits` (disponibilidad 120/60s, aleatorios 30/60s, subida 5/300s); rechazo/expiración limpian soporte, captura y archivo; `upload/ordenes/*` está en `.gitignore`; `X-Robots-Tag` y `no-store` en la captura.
+- **Validación**: `php -l` y `node --check` OK; Chrome headless verifica selección, búsqueda, azar, métodos, preview, galería, modo oscuro, móvil 390 sin overflow, flujo real con captura y limpieza. SECURITY `ACCEPTED_WITH_RISKS`; QA `ACCEPTED_WITH_RISKS`.
+- **Riesgos**: M2 Medium residual en rifas de gran volumen/offset alto; rate limit depende de `REMOTE_ADDR` (detrás de proxy puede compartir clave); token de checkout reutilizable en fallos; política de retención de comprobantes y capability URL pendientes de decisión de producto.
