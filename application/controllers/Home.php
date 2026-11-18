@@ -116,7 +116,12 @@ class Home extends MY_Controller
             return 1;
         }
 
-        $files = @glob(rtrim($sess_path, '\\/') . DIRECTORY_SEPARATOR . 'ci_session*');
+        $cookie_name = trim((string)(config_item('sess_cookie_name') ?: 'ci_session'));
+        if ($cookie_name === '') {
+            $cookie_name = 'ci_session';
+        }
+
+        $files = @glob(rtrim($sess_path, '\\/') . DIRECTORY_SEPARATOR . $cookie_name . '*');
         if (!is_array($files)) {
             return 1;
         }

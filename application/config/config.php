@@ -37,7 +37,14 @@ $config['encryption_key'] = env_value('APP_ENCRYPTION_KEY', '34d3820154f3319046a
 |--------------------------------------------------------------------------
 */
 $config['sess_driver']         = env_value('SESSION_DRIVER', 'files');
-$config['sess_cookie_name']    = env_value('SESSION_COOKIE_NAME', 'ci_session');
+$session_cookie_name           = env_value('SESSION_COOKIE_NAME', 'ci_session');
+if (!is_string($session_cookie_name) || trim($session_cookie_name) === '' || strcasecmp($session_cookie_name, 'ci_session') === 0)
+{
+    // Localhost comparte cookies entre todos los proyectos del mismo host.
+    // Un nombre generico hace que otra app sobrescriba esta sesion.
+    $session_cookie_name = 'sortea_session';
+}
+$config['sess_cookie_name']    = $session_cookie_name;
 $config['sess_expiration']     = (int) env_value('SESSION_EXPIRATION', 7200);
 $session_save_path             = env_value('SESSION_SAVE_PATH');
 $config['sess_save_path']      = is_string($session_save_path) && trim($session_save_path) !== ''
@@ -77,7 +84,7 @@ $config['global_xss_filtering'] = FALSE;
 */
 $config['csrf_protection']   = TRUE;
 $config['csrf_token_name']   = 'csrf_token';
-$config['csrf_cookie_name']  = 'csrf_cookie';
+$config['csrf_cookie_name']  = 'sortea_csrf_cookie';
 $config['csrf_expire']       = 7200;
 $config['csrf_regenerate']   = FALSE;
 $config['csrf_exclude_uris'] = [
